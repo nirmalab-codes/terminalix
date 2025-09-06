@@ -174,15 +174,15 @@ export function CryptoTableInfinite({
     const bothOverbought = rsi >= 70 && stochRsiValue >= 80;
     
     // Check for divergence types
-    let divergenceType: 'buy' | 'sell' | null = null;
+    let divergenceType: 'bottom' | 'top' | null = null;
     if (priceChange !== undefined) {
-      // Bullish divergence: RSI oversold but price starting to rise = BUY signal
+      // Bottom divergence (Bullish): RSI oversold but price starting to rise - reversal signal
       if (rsi <= 30 && priceChange > 0.5) {
-        divergenceType = 'buy';
+        divergenceType = 'bottom';
       }
-      // Bearish divergence: RSI overbought but price starting to fall = SELL signal
+      // Top divergence (Bearish): RSI overbought but price starting to fall - reversal signal
       else if (rsi >= 70 && priceChange < -0.5) {
-        divergenceType = 'sell';
+        divergenceType = 'top';
       }
     }
     
@@ -208,9 +208,9 @@ export function CryptoTableInfinite({
         {divergenceType && (
           <Badge className={cn(
             "absolute -top-1 -right-1 h-4 px-1 py-0 text-[8px] font-bold border-0",
-            divergenceType === 'buy' ? "bg-green-500 text-white" : "bg-red-500 text-white"
+            divergenceType === 'bottom' ? "bg-green-500 text-white" : "bg-orange-500 text-white"
           )}>
-            {divergenceType === 'buy' ? "B" : "S"}
+            {divergenceType === 'bottom' ? "B" : "T"}
           </Badge>
         )}
       </div>
@@ -265,13 +265,13 @@ export function CryptoTableInfinite({
                 <Badge className="bg-green-500/20 text-green-500 text-[10px] px-1 py-0 h-4">OS</Badge>
                 <span>Oversold</span>
               </div>
-              <div className="flex items-center gap-1" title="RSI oversold but price rising - potential buy signal">
+              <div className="flex items-center gap-1" title="Divergence Bawah: RSI oversold tapi harga mulai naik - sinyal pembalikan bullish">
                 <Badge className="h-4 px-1 bg-green-500 text-white text-[8px]">B</Badge>
-                <span>Buy Signal</span>
+                <span>Divergence Bawah</span>
               </div>
-              <div className="flex items-center gap-1" title="RSI overbought but price falling - potential sell signal">
-                <Badge className="h-4 px-1 bg-red-500 text-white text-[8px]">S</Badge>
-                <span>Sell Signal</span>
+              <div className="flex items-center gap-1" title="Divergence Atas: RSI overbought tapi harga mulai turun - sinyal pembalikan bearish">
+                <Badge className="h-4 px-1 bg-orange-500 text-white text-[8px]">T</Badge>
+                <span>Divergence Atas</span>
               </div>
             </div>
             <Badge variant="outline" className="text-xs ml-auto">
