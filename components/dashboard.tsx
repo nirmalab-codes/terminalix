@@ -146,6 +146,7 @@ export function Dashboard() {
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    let cryptoDataResults: CryptoData[] = [];
 
     try {
       let symbols = selectedSymbols;
@@ -170,7 +171,7 @@ export function Dashboard() {
       const initialKlines = await futuresAPI.getInitialKlines(symbols, config.interval, 50);
       
       // Process all market data with their klines
-      const cryptoDataResults: CryptoData[] = marketData.map((data) => {
+      cryptoDataResults = marketData.map((data) => {
         const klines = initialKlines.get(data.symbol) || [];
           
         // Initialize price history
@@ -260,8 +261,8 @@ export function Dashboard() {
     } finally {
       setLoading(false);
       // Show initial load complete notification
-      if (marketData.length > 0) {
-        toast.info(`Loaded ${marketData.length} pairs`, {
+      if (cryptoDataResults.length > 0) {
+        toast.info(`Loaded ${cryptoDataResults.length} pairs`, {
           description: 'Background sync in progress...',
           duration: 3000,
         });
@@ -271,10 +272,11 @@ export function Dashboard() {
 
   // Fetch multi-timeframe data in parallel for much faster loading
   const fetchMultiTimeframeData = useCallback(async (symbols: string[]) => {
-    const timeframes = ['15m', '30m', '1h', '4h'];
+    const timeframes = ['15m', '30m', '1h', '4h', '1w'];
     const futuresAPI = new BinanceFuturesAPI();
     
     try {
+      // Fetch klines - we need 50 for RSI calculation, but only 2 for price change
       // Fetch all klines data in parallel batches
       const allKlinesData = await futuresAPI.batchFetchKlines(symbols, timeframes, 50);
       
@@ -290,13 +292,16 @@ export function Dashboard() {
         const updates: any = {};
         
         for (const [tf, klines] of timeframeData.entries()) {
-          if (klines.length > 0) {
+          if (klines.length >= 2) {
             // Calculate price change for this timeframe
-            const firstPrice = klines[0];
-            const lastPrice = klines[klines.length - 1];
-            const priceChangePercent = ((lastPrice - firstPrice) / firstPrice) * 100;
+            // Compare current price with the price from 1 candle ago (1 period of this timeframe)
+            const currentPrice = klines[klines.length - 1]; // Most recent close price
+            const previousPrice = klines[klines.length - 2]; // Previous candle close price
             
-            const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : '4h';
+            // Calculate percentage change
+            const priceChangePercent = ((currentPrice - previousPrice) / previousPrice) * 100;
+            
+            const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : tf === '4h' ? '4h' : '1w';
             
             updates[`priceChange${tfSuffix}`] = priceChangePercent;
             
@@ -437,7 +442,7 @@ export function Dashboard() {
               // Get price change for this timeframe
               const changeData = priceChangeData.get(symbol);
               const priceChangeKey = `priceChange${tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : '4h'}`;
-              const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : '4h';
+              const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : tf === '4h' ? '4h' : '1w';
               
               // Update the specific timeframe RSI, StochRSI and price change
               updateCryptoItem(symbol, {

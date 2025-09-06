@@ -453,9 +453,9 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* Price Changes Section */}
-              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={5}>
+              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={6}>
                 <div className="text-xs font-medium">% Change</div>
-                <div className="grid grid-cols-5 gap-1 mt-1">
+                <div className="grid grid-cols-6 gap-1 mt-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -501,6 +501,15 @@ export function CryptoTableInfinite({
                     24h
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSort('priceChange1w' as keyof CryptoData)}
+                    className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
+                  >
+                    1w
+                    <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
+                  </Button>
                 </div>
               </TableHead>
 
@@ -518,9 +527,9 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* RSI / StochRSI Combined Section */}
-              <TableHead className="text-center p-1 border-x hidden md:table-cell" colSpan={5}>
+              <TableHead className="text-center p-1 border-x hidden md:table-cell" colSpan={6}>
                 <div className="text-xs font-medium">RSI / StochRSI</div>
-                <div className="grid grid-cols-5 gap-1 mt-1">
+                <div className="grid grid-cols-6 gap-1 mt-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -564,6 +573,15 @@ export function CryptoTableInfinite({
                     className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
                   >
                     4h
+                    <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSort('rsi1w' as keyof CryptoData)}
+                    className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
+                  >
+                    1w
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
                 </div>
@@ -637,8 +655,8 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* Price Changes - Combined cell */}
-                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={5}>
-                  <div className="grid grid-cols-5 gap-1">
+                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={6}>
+                  <div className="grid grid-cols-6 gap-1">
                     <div className={cn("text-center text-xs font-medium", 
                       (item.priceChange15m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
                       {item.priceChange15m !== undefined ? 
@@ -662,6 +680,11 @@ export function CryptoTableInfinite({
                     <div className={cn("text-center text-xs font-medium", 
                       item.priceChangePercent > 0 ? "text-green-500" : "text-red-500")}>
                       {item.priceChangePercent > 0 ? '+' : ''}{item.priceChangePercent.toFixed(1)}%
+                    </div>
+                    <div className={cn("text-center text-xs font-medium", 
+                      (item.priceChange1w ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
+                      {item.priceChange1w !== undefined ? 
+                        `${item.priceChange1w > 0 ? '+' : ''}${item.priceChange1w.toFixed(1)}%` : '-'}
                     </div>
                   </div>
                 </TableCell>
@@ -725,6 +748,10 @@ export function CryptoTableInfinite({
                     {/* 4h */}
                     <div className="text-center">
                       {renderRSICell(item.rsi4h, item.stochRsi4h, item.priceChange4h)}
+                    </div>
+                    {/* 1w */}
+                    <div className="text-center">
+                      {renderRSICell(item.rsi1w, item.stochRsi1w, item.priceChange1w)}
                     </div>
                   </div>
                 </TableCell>

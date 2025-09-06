@@ -4,9 +4,11 @@ export interface MarketData {
   priceChange: number;
   priceChangePercent: number;
   priceChange15m?: number;
+  priceChange30m?: number;
   priceChange1h?: number;
   priceChange4h?: number;
   priceChange24h?: number;
+  priceChange1w?: number;
   volume: number;
   quoteVolume: number;
   high: number;
@@ -39,19 +41,23 @@ export interface RSIData {
   rsi30m?: number;
   rsi1h?: number;
   rsi4h?: number;
+  rsi1w?: number;
   // Multi-timeframe StochRSI data
   stochRsi15m?: number;
   stochRsi30m?: number;
   stochRsi1h?: number;
   stochRsi4h?: number;
+  stochRsi1w?: number;
   stochRsiK15m?: number;
   stochRsiK30m?: number;
   stochRsiK1h?: number;
   stochRsiK4h?: number;
+  stochRsiK1w?: number;
   stochRsiD15m?: number;
   stochRsiD30m?: number;
   stochRsiD1h?: number;
   stochRsiD4h?: number;
+  stochRsiD1w?: number;
 }
 
 export interface CryptoData extends MarketData, RSIData {
