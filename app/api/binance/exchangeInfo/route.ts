@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 const BINANCE_API_BASE = 'https://fapi.binance.com/fapi/v1';
 
 export async function GET() {

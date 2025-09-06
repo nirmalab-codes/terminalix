@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 const BINANCE_API_BASE = 'https://api.binance.com/api/v3';
 
 export async function GET(request: NextRequest) {
