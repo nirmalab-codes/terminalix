@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { useStore } from '@/lib/store';
 import { BinanceAPI } from '@/lib/binance';
 import { BinanceFuturesAPI } from '@/lib/binance-futures';
@@ -206,7 +207,7 @@ export function Dashboard() {
         const signal = detectAdvancedSignal({
           ...data,
           rsi,
-          stochRsi: stochRsi.value,
+          stochRsi: stochRsi.k, // Use K value for display
           stochRsiK: stochRsi.k,
           stochRsiD: stochRsi.d,
           priceChange24h: data.priceChangePercent,
@@ -235,7 +236,22 @@ export function Dashboard() {
       
       // Fetch multi-timeframe data progressively after initial load
       setTimeout(() => {
-        fetchMultiTimeframeData(symbols);
+        // Show toast for background processing
+        const toastId = toast.loading('Syncing multi-timeframe data...', {
+          description: 'Processing RSI indicators across 15m, 30m, 1h, 4h timeframes',
+        });
+        
+        fetchMultiTimeframeData(symbols).then(() => {
+          toast.success('Data sync complete', {
+            id: toastId,
+            description: 'All indicators updated successfully',
+          });
+        }).catch(() => {
+          toast.error('Sync failed', {
+            id: toastId,
+            description: 'Some indicators may not be available',
+          });
+        });
       }, 1000);
       
     } catch (err) {
@@ -243,6 +259,13 @@ export function Dashboard() {
       setError('Failed to fetch initial data. Please refresh the page.');
     } finally {
       setLoading(false);
+      // Show initial load complete notification
+      if (marketData.length > 0) {
+        toast.info(`Loaded ${marketData.length} pairs`, {
+          description: 'Background sync in progress...',
+          duration: 3000,
+        });
+      }
     }
   }, [selectedSymbols, config, binanceAPI, setCryptoData, setLoading, setError]);
 
@@ -294,7 +317,7 @@ export function Dashboard() {
               const stochRsiData = calculateStochRSI(rsiHistoryValues, config.stochRsiPeriod);
               
               updates[`rsi${tfSuffix}`] = rsiValue;
-              updates[`stochRsi${tfSuffix}`] = stochRsiData.value;
+              updates[`stochRsi${tfSuffix}`] = stochRsiData.k; // Use K value for display
               updates[`stochRsiK${tfSuffix}`] = stochRsiData.k;
               updates[`stochRsiD${tfSuffix}`] = stochRsiData.d;
             }
@@ -498,7 +521,7 @@ export function Dashboard() {
         return {
           ...item,
           rsi,
-          stochRsi: stochRsi.value,
+          stochRsi: stochRsi.k, // Use K value for display
           stochRsiK: stochRsi.k,
           stochRsiD: stochRsi.d,
           isOverbought,

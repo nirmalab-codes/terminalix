@@ -44,44 +44,57 @@ export function calculateRSI(prices: number[], period: number = 14): number {
 
 export function calculateStochRSI(
   rsiValues: number[],
-  period: number = 14
+  period: number = 14,
+  kPeriod: number = 3,
+  dPeriod: number = 3
 ): { k: number; d: number; value: number } {
   if (rsiValues.length < period) {
-    return { k: 0.5, d: 0.5, value: 0.5 }; // Return as 0-1 range
+    return { k: 50, d: 50, value: 0.5 }; // Return K and D as 0-100, value as 0-1
   }
 
-  const recentRSI = rsiValues.slice(-period);
-  const currentRSI = rsiValues[rsiValues.length - 1];
-  const minRSI = Math.min(...recentRSI);
-  const maxRSI = Math.max(...recentRSI);
-
-  if (maxRSI === minRSI) {
-    return { k: 0.5, d: 0.5, value: 0.5 }; // Return as 0-1 range
+  // Calculate StochRSI values for the recent period
+  const stochRsiValues: number[] = [];
+  
+  for (let i = period - 1; i < rsiValues.length; i++) {
+    const periodRSI = rsiValues.slice(i - period + 1, i + 1);
+    const currentRSI = rsiValues[i];
+    const minRSI = Math.min(...periodRSI);
+    const maxRSI = Math.max(...periodRSI);
+    
+    if (maxRSI === minRSI) {
+      stochRsiValues.push(50); // Middle value when no range
+    } else {
+      // StochRSI formula: ((RSI - RSI Low) / (RSI High - RSI Low)) * 100
+      const stochRSI = ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100;
+      stochRsiValues.push(stochRSI);
+    }
   }
 
-  const stochRSI = (currentRSI - minRSI) / (maxRSI - minRSI); // Keep as 0-1 range
+  // Calculate %K (SMA of StochRSI)
+  let k = stochRsiValues[stochRsiValues.length - 1];
+  if (stochRsiValues.length >= kPeriod) {
+    const kValues = stochRsiValues.slice(-kPeriod);
+    k = kValues.reduce((sum, val) => sum + val, 0) / kPeriod;
+  }
 
-  const kPeriod = 3;
-
-  let k = stochRSI;
-  const d = stochRSI;
-
-  if (rsiValues.length >= period + kPeriod) {
-    const kValues: number[] = [];
-    for (let i = 0; i < kPeriod; i++) {
-      const idx = rsiValues.length - kPeriod + i;
-      const rsi = rsiValues[idx];
-      const periodRSI = rsiValues.slice(idx - period + 1, idx + 1);
-      const min = Math.min(...periodRSI);
-      const max = Math.max(...periodRSI);
-      if (max !== min) {
-        kValues.push((rsi - min) / (max - min)); // Keep as 0-1 range
+  // Calculate %D (SMA of %K)
+  let d = k;
+  if (stochRsiValues.length >= kPeriod + dPeriod - 1) {
+    const dValues: number[] = [];
+    for (let i = 0; i < dPeriod; i++) {
+      const idx = stochRsiValues.length - dPeriod + i;
+      if (idx >= kPeriod - 1) {
+        const kVals = stochRsiValues.slice(idx - kPeriod + 1, idx + 1);
+        dValues.push(kVals.reduce((sum, val) => sum + val, 0) / kPeriod);
       }
     }
-    k = kValues.length > 0 ? kValues.reduce((a, b) => a + b, 0) / kValues.length : stochRSI;
+    if (dValues.length > 0) {
+      d = dValues.reduce((sum, val) => sum + val, 0) / dValues.length;
+    }
   }
 
-  return { k, d, value: stochRSI };
+  // Return k and d as 0-100 range, value as 0-1 for compatibility
+  return { k, d, value: k / 100 };
 }
 
 export function detectReversal(

@@ -89,8 +89,8 @@ export function DashboardWithSidebar() {
         <Dashboard />
       </main>
 
-      {/* Footer */}
-      <footer className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mt-8">
+      {/* Footer - Fixed on desktop, normal flow on mobile */}
+      <footer className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mt-8 sm:fixed sm:bottom-0 sm:left-0 sm:right-0 sm:mt-0 sm:z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -104,13 +104,14 @@ export function DashboardWithSidebar() {
                 @josephvoxone
               </a>
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center">
-              <span>Powered by Binance API</span>
-              <span className="text-[10px] opacity-50">v1.0.0</span>
+            <div className="text-center">
+              <span className="text-[10px] opacity-50">Version 1.0.0</span>
             </div>
           </div>
         </div>
       </footer>
+      {/* Spacer for fixed footer on desktop */}
+      <div className="hidden sm:block h-16"></div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Table,
   TableBody,
@@ -223,7 +224,8 @@ export function CryptoTableInfinite({
       return <span className="text-[10px] text-zinc-400 opacity-50">—</span>;
     }
     
-    const stochRsiValue = (stochRsi || 0) * 100;
+    // StochRSI is now returned as K value in 0-100 range from the calculation
+    const stochRsiValue = stochRsi !== undefined ? stochRsi : 50;
     const bothOversold = rsi <= 30 && stochRsiValue <= 20;
     const bothOverbought = rsi >= 70 && stochRsiValue >= 80;
     
@@ -274,24 +276,84 @@ export function CryptoTableInfinite({
     { primary: "Streaming live data", secondary: "Connecting to Binance Futures USDT pairs" },
   ], []);
 
+  // Animated dots state
+  const [dots, setDots] = useState('');
+  
   useEffect(() => {
     if (isLoading && displayedItems.length === 0) {
-      const interval = setInterval(() => {
+      // Text rotation - slower at 4 seconds
+      const textInterval = setInterval(() => {
         setLoadingTextIndex(prev => (prev + 1) % loadingTexts.length);
-      }, 2000);
-      return () => clearInterval(interval);
+      }, 4000);
+      
+      // Dots animation
+      const dotsInterval = setInterval(() => {
+        setDots(prev => prev.length >= 3 ? '' : prev + '.');
+      }, 500);
+      
+      return () => {
+        clearInterval(textInterval);
+        clearInterval(dotsInterval);
+      };
     }
   }, [isLoading, displayedItems.length, loadingTexts.length]);
 
   if (isLoading && displayedItems.length === 0) {
     const currentText = loadingTexts[loadingTextIndex];
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <div className="text-center space-y-1">
-          <p className="text-sm font-medium">{currentText.primary}</p>
-          <p className="text-xs text-muted-foreground">{currentText.secondary}</p>
-        </div>
+      <div className="flex flex-col items-center justify-center h-64 gap-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={loadingTextIndex}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            className="text-center space-y-3"
+          >
+            <motion.p 
+              className="text-base font-semibold flex items-center justify-center gap-1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              {currentText.primary}
+              <span className="inline-block w-8 text-left">{dots}</span>
+            </motion.p>
+            <motion.p 
+              className="text-sm text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              {currentText.secondary}
+            </motion.p>
+          </motion.div>
+        </AnimatePresence>
+        
+        <motion.div 
+          className="flex gap-2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+        >
+          {[0, 1, 2, 3, 4].map((i) => (
+            <motion.div
+              key={i}
+              className="w-2.5 h-2.5 bg-primary rounded-full"
+              animate={{
+                y: [0, -12, 0],
+                opacity: [0.3, 1, 0.3]
+              }}
+              transition={{
+                duration: 1.4,
+                repeat: Infinity,
+                delay: i * 0.2,
+                ease: "easeInOut"
+              }}
+            />
+          ))}
+        </motion.div>
       </div>
     );
   }
@@ -391,9 +453,9 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* Price Changes Section */}
-              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={4}>
+              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={5}>
                 <div className="text-xs font-medium">% Change</div>
-                <div className="grid grid-cols-4 gap-1 mt-1">
+                <div className="grid grid-cols-5 gap-1 mt-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -401,6 +463,15 @@ export function CryptoTableInfinite({
                     className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
                   >
                     15m
+                    <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSort('priceChange30m' as keyof CryptoData)}
+                    className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
+                  >
+                    30m
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
                   <Button
@@ -566,12 +637,17 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* Price Changes - Combined cell */}
-                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={4}>
-                  <div className="grid grid-cols-4 gap-1">
+                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={5}>
+                  <div className="grid grid-cols-5 gap-1">
                     <div className={cn("text-center text-xs font-medium", 
                       (item.priceChange15m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
                       {item.priceChange15m !== undefined ? 
                         `${item.priceChange15m > 0 ? '+' : ''}${item.priceChange15m.toFixed(1)}%` : '-'}
+                    </div>
+                    <div className={cn("text-center text-xs font-medium", 
+                      (item.priceChange30m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
+                      {item.priceChange30m !== undefined ? 
+                        `${item.priceChange30m > 0 ? '+' : ''}${item.priceChange30m.toFixed(1)}%` : '-'}
                     </div>
                     <div className={cn("text-center text-xs font-medium", 
                       (item.priceChange1h ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
@@ -640,7 +716,7 @@ export function CryptoTableInfinite({
                     </div>
                     {/* 30m */}
                     <div className="text-center">
-                      {renderRSICell(item.rsi30m, item.stochRsi30m, item.priceChangePercent)}
+                      {renderRSICell(item.rsi30m, item.stochRsi30m, item.priceChange30m)}
                     </div>
                     {/* 1h */}
                     <div className="text-center">
