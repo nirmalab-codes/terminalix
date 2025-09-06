@@ -165,19 +165,26 @@ export function CryptoTableInfinite({
     stochRsi: number | undefined, 
     priceChange: number | undefined
   ) => {
-    if (rsi === undefined) {
-      return <span className="text-xs text-zinc-500">-</span>;
+    if (rsi === undefined || rsi === null) {
+      return <span className="text-[10px] text-zinc-400 opacity-50">—</span>;
     }
     
     const stochRsiValue = (stochRsi || 0) * 100;
     const bothOversold = rsi <= 30 && stochRsiValue <= 20;
     const bothOverbought = rsi >= 70 && stochRsiValue >= 80;
     
-    // Check for divergence: RSI overbought but price falling, or RSI oversold but price rising
-    const hasDivergence = priceChange !== undefined && (
-      (rsi >= 70 && priceChange < -0.5) || 
-      (rsi <= 30 && priceChange > 0.5)
-    );
+    // Check for divergence types
+    let divergenceType: 'buy' | 'sell' | null = null;
+    if (priceChange !== undefined) {
+      // Bullish divergence: RSI oversold but price starting to rise = BUY signal
+      if (rsi <= 30 && priceChange > 0.5) {
+        divergenceType = 'buy';
+      }
+      // Bearish divergence: RSI overbought but price starting to fall = SELL signal
+      else if (rsi >= 70 && priceChange < -0.5) {
+        divergenceType = 'sell';
+      }
+    }
     
     return (
       <div className="relative inline-flex items-center justify-center">
@@ -198,9 +205,12 @@ export function CryptoTableInfinite({
             <span className="text-xs text-zinc-500">-</span>
           )}
         </div>
-        {hasDivergence && (
-          <Badge className="absolute -top-1 -right-1 h-3 w-3 p-0 bg-yellow-500 border-0">
-            <span className="text-[8px] font-bold">D</span>
+        {divergenceType && (
+          <Badge className={cn(
+            "absolute -top-1 -right-1 h-4 px-1 py-0 text-[8px] font-bold border-0",
+            divergenceType === 'buy' ? "bg-green-500 text-white" : "bg-red-500 text-white"
+          )}>
+            {divergenceType === 'buy' ? "B" : "S"}
           </Badge>
         )}
       </div>
@@ -245,8 +255,8 @@ export function CryptoTableInfinite({
           </div>
           
           {/* Stats and Legend inline */}
-          <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 <span>Overbought</span>
@@ -255,12 +265,16 @@ export function CryptoTableInfinite({
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>Oversold</span>
               </div>
-              <div className="hidden sm:flex items-center gap-1">
-                <Info className="h-3 w-3" />
-                <span>RSI/StochRSI</span>
+              <div className="flex items-center gap-1" title="RSI oversold but price rising - potential buy signal">
+                <Badge className="h-4 px-1 bg-green-500 text-white text-[8px]">B</Badge>
+                <span>Buy Signal</span>
+              </div>
+              <div className="flex items-center gap-1" title="RSI overbought but price falling - potential sell signal">
+                <Badge className="h-4 px-1 bg-red-500 text-white text-[8px]">S</Badge>
+                <span>Sell Signal</span>
               </div>
             </div>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs ml-auto">
               <span className="font-bold">{displayedItems.length}</span>
               {displayedCount < filteredData.length && (
                 <span className="text-muted-foreground ml-1">/ {filteredData.length}</span>

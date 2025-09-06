@@ -582,6 +582,22 @@ export function Dashboard() {
       const aVal = a[sort.field];
       const bVal = b[sort.field];
       
+      // Handle null/undefined values - push them to the end regardless of sort direction
+      if (aVal === null || aVal === undefined) {
+        return 1; // Always push null/undefined to the end
+      }
+      if (bVal === null || bVal === undefined) {
+        return -1; // Always push null/undefined to the end
+      }
+      
+      // For RSI fields, handle special sorting
+      if (sort.field.toString().includes('rsi') || sort.field.toString().includes('stochRsi')) {
+        // Both values exist, sort normally
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return (aVal - bVal) * modifier;
+        }
+      }
+      
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return (aVal - bVal) * modifier;
       }
