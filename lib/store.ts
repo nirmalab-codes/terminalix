@@ -31,7 +31,7 @@ export const useStore = create<AppState>()(
         stochRsiPeriod: 7,
         overboughtLevel: 70,
         oversoldLevel: 30,
-        interval: '15m',
+        interval: '30m',
         symbols: [],
         refreshInterval: 30000, // Changed to 30 seconds to avoid rate limits
         volumeThreshold: 1000000,

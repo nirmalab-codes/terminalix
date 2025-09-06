@@ -1,7 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { MarketData } from './types';
 
-const BINANCE_API_BASE = 'https://api.binance.com/api/v3';
+// Use API routes to avoid CORS issues
+const BINANCE_API_BASE = '/api/binance';
 const BINANCE_WS_BASE = 'wss://stream.binance.com:9443/ws';
 
 interface QueuedRequest {
@@ -134,7 +135,7 @@ export class BinanceAPI {
 
     try {
       const result = await this.queueRequest(async () => {
-        const response = await this.makeRequest(`${BINANCE_API_BASE}/ticker/24hr`);
+        const response = await this.makeRequest(`${BINANCE_API_BASE}/ticker`);
         const tickers = response.data
           .filter((t: { symbol: string }) => t.symbol.endsWith('USDT'))
           .sort((a: { quoteVolume: string }, b: { quoteVolume: string }) => 
@@ -170,7 +171,7 @@ export class BinanceAPI {
 
     try {
       const result = await this.queueRequest(async () => {
-        const response = await this.makeRequest(`${BINANCE_API_BASE}/ticker/24hr`);
+        const response = await this.makeRequest(`${BINANCE_API_BASE}/ticker`);
         const allData = response.data.map((item: {
           symbol: string;
           lastPrice: string;

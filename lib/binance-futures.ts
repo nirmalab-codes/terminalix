@@ -1,8 +1,9 @@
 // Optimized Binance Futures API for parallel data fetching
 import { MarketData } from './types';
 
-const BINANCE_SPOT_API = 'https://api.binance.com/api/v3';
-const BINANCE_FUTURES_API = 'https://fapi.binance.com/fapi/v1';
+// Use API routes to avoid CORS issues
+const BINANCE_SPOT_API = '/api/binance';
+const BINANCE_FUTURES_API = '/api/binance';
 
 interface FuturesSymbolInfo {
   symbol: string;
@@ -25,7 +26,7 @@ export class BinanceFuturesAPI {
         return Array.from(this.futuresSymbols);
       }
 
-      const response = await fetch(`${BINANCE_FUTURES_API}/exchangeInfo`);
+      const response = await fetch('/api/binance/exchangeInfo');
       const data = await response.json();
       
       const symbols = data.symbols
@@ -56,7 +57,7 @@ export class BinanceFuturesAPI {
       // Fetch futures symbols and 24hr tickers in parallel
       const [futuresSymbols, tickerResponse] = await Promise.all([
         this.getFuturesSymbols(),
-        fetch(`${BINANCE_SPOT_API}/ticker/24hr`)
+        fetch('/api/binance/ticker')
       ]);
 
       const tickerData = await tickerResponse.json();
@@ -110,7 +111,7 @@ export class BinanceFuturesAPI {
     for (const symbol of symbols) {
       for (const interval of intervals) {
         fetchPromises.push(
-          fetch(`${BINANCE_SPOT_API}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+          fetch(`/api/binance/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
             .then(res => res.json())
             .then(data => ({
               symbol,
