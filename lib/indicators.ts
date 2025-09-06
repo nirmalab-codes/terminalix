@@ -47,7 +47,7 @@ export function calculateStochRSI(
   period: number = 14
 ): { k: number; d: number; value: number } {
   if (rsiValues.length < period) {
-    return { k: 50, d: 50, value: 50 };
+    return { k: 0.5, d: 0.5, value: 0.5 }; // Return as 0-1 range
   }
 
   const recentRSI = rsiValues.slice(-period);
@@ -56,10 +56,10 @@ export function calculateStochRSI(
   const maxRSI = Math.max(...recentRSI);
 
   if (maxRSI === minRSI) {
-    return { k: 50, d: 50, value: 50 };
+    return { k: 0.5, d: 0.5, value: 0.5 }; // Return as 0-1 range
   }
 
-  const stochRSI = ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100;
+  const stochRSI = (currentRSI - minRSI) / (maxRSI - minRSI); // Keep as 0-1 range
 
   const kPeriod = 3;
 
@@ -75,7 +75,7 @@ export function calculateStochRSI(
       const min = Math.min(...periodRSI);
       const max = Math.max(...periodRSI);
       if (max !== min) {
-        kValues.push(((rsi - min) / (max - min)) * 100);
+        kValues.push((rsi - min) / (max - min)); // Keep as 0-1 range
       }
     }
     k = kValues.length > 0 ? kValues.reduce((a, b) => a + b, 0) / kValues.length : stochRSI;
@@ -92,17 +92,23 @@ export function detectReversal(
   overbought: number = 70,
   oversold: number = 30
 ): boolean {
+  // RSI reversal signals
   const rsiCrossingOversold = previousRsi <= oversold && rsi > oversold;
   const rsiCrossingOverbought = previousRsi >= overbought && rsi < overbought;
   
-  const stochRsiCrossingOversold = previousStochRsi <= 20 && stochRsi > 20;
-  const stochRsiCrossingOverbought = previousStochRsi >= 80 && stochRsi < 80;
+  // Stoch RSI reversal signals (stochRsi is in 0-1 range, so 0.2 = 20%, 0.8 = 80%)
+  const stochRsiCrossingOversold = previousStochRsi <= 0.2 && stochRsi > 0.2;
+  const stochRsiCrossingOverbought = previousStochRsi >= 0.8 && stochRsi < 0.8;
+  
+  // Additional reversal patterns
+  const rsiDivergence = (rsi <= oversold && stochRsi > 0.2) || (rsi >= overbought && stochRsi < 0.8);
 
   return (
     rsiCrossingOversold ||
     rsiCrossingOverbought ||
     stochRsiCrossingOversold ||
-    stochRsiCrossingOverbought
+    stochRsiCrossingOverbought ||
+    rsiDivergence
   );
 }
 

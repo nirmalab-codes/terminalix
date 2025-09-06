@@ -3,6 +3,10 @@ export interface MarketData {
   price: number;
   priceChange: number;
   priceChangePercent: number;
+  priceChange15m?: number;
+  priceChange1h?: number;
+  priceChange4h?: number;
+  priceChange24h?: number;
   volume: number;
   quoteVolume: number;
   high: number;
@@ -10,6 +14,13 @@ export interface MarketData {
   open: number;
   close: number;
   timestamp: number;
+}
+
+export interface SignalData {
+  type: 'LONG' | 'SHORT' | 'NEUTRAL';
+  strength: 'STRONG' | 'MEDIUM' | 'WEAK';
+  timeframe: 'SHORT' | 'MID' | 'LONG'; // Short-term, Mid-term, Long-term
+  reason: string;
 }
 
 export interface RSIData {
@@ -22,6 +33,25 @@ export interface RSIData {
   isOversold: boolean;
   trend: 'bullish' | 'bearish' | 'neutral';
   reversalSignal: boolean;
+  signal?: SignalData;
+  // Multi-timeframe RSI data
+  rsi15m?: number;
+  rsi30m?: number;
+  rsi1h?: number;
+  rsi4h?: number;
+  // Multi-timeframe StochRSI data
+  stochRsi15m?: number;
+  stochRsi30m?: number;
+  stochRsi1h?: number;
+  stochRsi4h?: number;
+  stochRsiK15m?: number;
+  stochRsiK30m?: number;
+  stochRsiK1h?: number;
+  stochRsiK4h?: number;
+  stochRsiD15m?: number;
+  stochRsiD30m?: number;
+  stochRsiD1h?: number;
+  stochRsiD4h?: number;
 }
 
 export interface CryptoData extends MarketData, RSIData {

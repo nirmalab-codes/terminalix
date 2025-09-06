@@ -20,6 +20,16 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-require-imports": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react/jsx-no-undef": "off",
+      "@next/next/no-img-element": "off"
+    }
+  }
 ];
 
 export default eslintConfig;

@@ -27,13 +27,13 @@ export const useStore = create<AppState>()(
     (set) => ({
       cryptoData: [],
       config: {
-        rsiPeriod: 14,
-        stochRsiPeriod: 14,
+        rsiPeriod: 7,
+        stochRsiPeriod: 7,
         overboughtLevel: 70,
         oversoldLevel: 30,
         interval: '15m',
         symbols: [],
-        refreshInterval: 5000,
+        refreshInterval: 30000, // Changed to 30 seconds to avoid rate limits
         volumeThreshold: 1000000,
       },
       filter: {

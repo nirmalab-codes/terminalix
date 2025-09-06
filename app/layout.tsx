@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Crypto Trading Dashboard",
+  title: "Trading Dashboard",
   description: "Real-time RSI monitoring and trading signals",
 };
 

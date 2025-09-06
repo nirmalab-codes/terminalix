@@ -1,5 +1,5 @@
-import { Dashboard } from '@/components/dashboard';
+import { DashboardWithSidebar } from '@/components/dashboard-with-sidebar';
 
 export default function Home() {
-  return <Dashboard />;
+  return <DashboardWithSidebar />;
 }
