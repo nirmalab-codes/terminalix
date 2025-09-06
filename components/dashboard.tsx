@@ -573,9 +573,18 @@ export function Dashboard() {
       
       // Special handling for status (isOverbought/isOversold)
       if (sort.field === 'isOverbought') {
-        // Sort by status priority: Overbought > Oversold > Neutral
-        const aStatus = a.isOverbought ? 3 : a.isOversold ? 2 : 1;
-        const bStatus = b.isOverbought ? 3 : b.isOversold ? 2 : 1;
+        // Get status values
+        const aHasStatus = a.isOverbought || a.isOversold;
+        const bHasStatus = b.isOverbought || b.isOversold;
+        
+        // Push items with no status to the end
+        if (!aHasStatus && bHasStatus) return 1;
+        if (aHasStatus && !bHasStatus) return -1;
+        if (!aHasStatus && !bHasStatus) return 0;
+        
+        // Both have status, sort by priority: Overbought > Oversold
+        const aStatus = a.isOverbought ? 2 : 1;
+        const bStatus = b.isOverbought ? 2 : 1;
         return (aStatus - bStatus) * -modifier;
       }
       

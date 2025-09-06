@@ -258,11 +258,11 @@ export function CryptoTableInfinite({
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">OB</Badge>
                 <span>Overbought</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <Badge className="bg-green-500/20 text-green-500 text-[10px] px-1 py-0 h-4">OS</Badge>
                 <span>Oversold</span>
               </div>
               <div className="flex items-center gap-1" title="RSI oversold but price rising - potential buy signal">
@@ -591,7 +591,7 @@ export function CryptoTableInfinite({
                     </Badge>
                   )}
                   {!item.isOverbought && !item.isOversold && (
-                    <span className="text-xs text-muted-foreground">-</span>
+                    <span className="text-[10px] text-zinc-400 opacity-50">—</span>
                   )}
                 </TableCell>
 
