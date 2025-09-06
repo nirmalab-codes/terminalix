@@ -165,24 +165,25 @@ export function CryptoTableInfinite({
     <div className="rounded-lg border bg-card">
       {/* Legend - Moved to top */}
       <div className="p-3 border-b bg-muted/30">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2 sm:gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <span>Overbought (RSI &gt; 70)</span>
+              <span>Overbought</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Oversold (RSI &lt; 30)</span>
+              <span>Oversold</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="hidden sm:flex items-center gap-1">
               <Info className="h-3 w-3" />
-              <span>K/D = StochRSI Fast/Slow</span>
+              <span>RSI / StochRSI</span>
             </div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            Showing {displayedItems.length} of {data.length} coins
-          </div>
+          <Badge variant="outline" className="text-xs">
+            <span className="font-bold">{displayedItems.length}</span>
+            <span className="text-muted-foreground ml-1">/ {data.length}</span>
+          </Badge>
         </div>
       </div>
       
@@ -217,7 +218,7 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* Price Changes Section */}
-              <TableHead className="text-center p-1 border-x" colSpan={4}>
+              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={4}>
                 <div className="text-xs font-medium">% Change</div>
                 <div className="grid grid-cols-4 gap-1 mt-1">
                   <Button
@@ -273,7 +274,7 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* RSI / StochRSI Combined Section */}
-              <TableHead className="text-center p-1 border-x" colSpan={5}>
+              <TableHead className="text-center p-1 border-x hidden md:table-cell" colSpan={5}>
                 <div className="text-xs font-medium">RSI / StochRSI</div>
                 <div className="grid grid-cols-5 gap-1 mt-1">
                   <Button
@@ -380,7 +381,7 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* Price Changes - Combined cell */}
-                <TableCell className="p-1 border-x" colSpan={4}>
+                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={4}>
                   <div className="grid grid-cols-4 gap-1">
                     <div className={cn("text-center text-xs font-medium", 
                       (item.priceChange15m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
@@ -410,7 +411,7 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* RSI / StochRSI Combined Values */}
-                <TableCell className="p-1 border-x" colSpan={5}>
+                <TableCell className="p-1 border-x hidden md:table-cell" colSpan={5}>
                   <div className="grid grid-cols-5 gap-1">
                     {/* Current */}
                     <div className="text-center">

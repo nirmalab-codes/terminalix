@@ -85,14 +85,14 @@ export function DashboardWithSidebar() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto p-4 pb-16">
+      <main className="container mx-auto p-4">
         <Dashboard />
       </main>
 
       {/* Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <footer className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mt-8">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <span>Built with ❤️ by</span>
               <a 
@@ -104,8 +104,8 @@ export function DashboardWithSidebar() {
                 @josephvoxone
               </a>
             </div>
-            <div className="flex items-center gap-4">
-              <span>Powered by Binance API & CoinMarketCap</span>
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center">
+              <span>Powered by Binance API</span>
               <span className="text-[10px] opacity-50">v1.0.0</span>
             </div>
           </div>

@@ -20,6 +20,7 @@ import { SignalMarquee } from './signal-marquee';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, TrendingUp, TrendingDown, Activity, Wifi, Triangle } from 'lucide-react';
 
 export function Dashboard() {
@@ -657,15 +658,17 @@ export function Dashboard() {
 
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="all">All ({filteredData.length})</TabsTrigger>
-            <TabsTrigger value="overbought">
-              Overbought ({stats.overbought})
+            <TabsTrigger value="all" className="gap-2">
+              All <Badge variant="secondary" className="ml-1 h-5 px-1.5">{filteredData.length}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="oversold">
-              Oversold ({stats.oversold})
+            <TabsTrigger value="overbought" className="gap-2">
+              Overbought <Badge variant="destructive" className="ml-1 h-5 px-1.5">{stats.overbought}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="reversals">
-              Reversals ({stats.reversals})
+            <TabsTrigger value="oversold" className="gap-2">
+              Oversold <Badge className="ml-1 h-5 px-1.5 bg-green-500/20 text-green-500">{stats.oversold}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="reversals" className="gap-2">
+              Reversals <Badge variant="outline" className="ml-1 h-5 px-1.5">{stats.reversals}</Badge>
             </TabsTrigger>
           </TabsList>
 
