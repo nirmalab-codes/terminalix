@@ -48,7 +48,7 @@ export function DashboardWithSidebar() {
               TERMINALUX
             </h1>
             <span className="text-xs text-muted-foreground hidden sm:inline">
-              Real-time Crypto Trading Dashboard
+              Real-time Crypto Trading Signals
             </span>
           </div>
           

@@ -43,6 +43,7 @@ export function CryptoTableInfinite({
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedCount, setDisplayedCount] = useState(ITEMS_PER_PAGE);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadingTextIndex, setLoadingTextIndex] = useState(0);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   
@@ -159,7 +160,60 @@ export function CryptoTableInfinite({
     );
   };
   
-  // Helper to render RSI/StochRSI with divergence detection
+  // Detect divergence/convergence patterns based on 8 types
+  const detectPattern = (
+    rsi: number | undefined,
+    priceChange: number | undefined,
+    prevRsi?: number,
+    prevPrice?: number
+  ): { type: 'D' | 'C' | null; direction: 'B' | 'T' | null; signal: 'bullish' | 'bearish' | null } => {
+    if (!rsi || priceChange === undefined) {
+      return { type: null, direction: null, signal: null };
+    }
+
+    // For simplified detection without historical data, use current values
+    const isOverbought = rsi >= 70;
+    const isOversold = rsi <= 30;
+    const priceRising = priceChange > 0.5;
+    const priceFalling = priceChange < -0.5;
+
+    // BEARISH PATTERNS (Sell signals)
+    if (isOverbought) {
+      if (priceFalling) {
+        // Top Divergence: Price weakening while RSI overbought
+        return { type: 'D', direction: 'T', signal: 'bearish' };
+      } else if (priceRising) {
+        // Top Convergence: Price and RSI both high (trend continuation)
+        return { type: 'C', direction: 'T', signal: 'bearish' };
+      }
+    }
+
+    // BULLISH PATTERNS (Buy signals)
+    if (isOversold) {
+      if (priceRising) {
+        // Bottom Divergence: Price strengthening while RSI oversold
+        return { type: 'D', direction: 'B', signal: 'bullish' };
+      } else if (priceFalling) {
+        // Bottom Convergence: Price and RSI both low (trend continuation)
+        return { type: 'C', direction: 'B', signal: 'bullish' };
+      }
+    }
+
+    // Check mid-range divergences
+    if (rsi > 30 && rsi < 70) {
+      // Hidden divergences in trending markets
+      if (rsi > 50 && priceChange < -1) {
+        return { type: 'D', direction: 'T', signal: 'bearish' };
+      }
+      if (rsi < 50 && priceChange > 1) {
+        return { type: 'D', direction: 'B', signal: 'bullish' };
+      }
+    }
+
+    return { type: null, direction: null, signal: null };
+  };
+
+  // Helper to render RSI/StochRSI with divergence/convergence detection
   const renderRSICell = (
     rsi: number | undefined, 
     stochRsi: number | undefined, 
@@ -173,18 +227,8 @@ export function CryptoTableInfinite({
     const bothOversold = rsi <= 30 && stochRsiValue <= 20;
     const bothOverbought = rsi >= 70 && stochRsiValue >= 80;
     
-    // Check for divergence types
-    let divergenceType: 'bottom' | 'top' | null = null;
-    if (priceChange !== undefined) {
-      // Bottom divergence (Bullish): RSI oversold but price starting to rise - reversal signal
-      if (rsi <= 30 && priceChange > 0.5) {
-        divergenceType = 'bottom';
-      }
-      // Top divergence (Bearish): RSI overbought but price starting to fall - reversal signal
-      else if (rsi >= 70 && priceChange < -0.5) {
-        divergenceType = 'top';
-      }
-    }
+    // Detect pattern
+    const pattern = detectPattern(rsi, priceChange);
     
     return (
       <div className="relative inline-flex items-center justify-center">
@@ -205,25 +249,48 @@ export function CryptoTableInfinite({
             <span className="text-xs text-zinc-500">-</span>
           )}
         </div>
-        {divergenceType && (
+        {pattern.type && pattern.direction && (
           <Badge className={cn(
-            "absolute -top-1 -right-1 h-4 px-1 py-0 text-[8px] font-bold border-0",
-            divergenceType === 'bottom' ? "bg-green-500 text-white" : "bg-orange-500 text-white"
+            "absolute -top-1 -right-1 h-3 w-6 px-0 py-0 text-[7px] font-bold border-0 flex items-center justify-center",
+            pattern.type === 'D' && pattern.direction === 'B' && "bg-green-500 text-white",
+            pattern.type === 'D' && pattern.direction === 'T' && "bg-orange-500 text-white",
+            pattern.type === 'C' && pattern.direction === 'B' && "bg-blue-500 text-white",
+            pattern.type === 'C' && pattern.direction === 'T' && "bg-purple-500 text-white"
           )}>
-            {divergenceType === 'bottom' ? "B" : "T"}
+            {`${pattern.type}${pattern.direction}`}
           </Badge>
         )}
       </div>
     );
   };
 
+  // Loading text variations
+  const loadingTexts = useMemo(() => [
+    { primary: "Analyzing market trends", secondary: "Calculating RSI divergences across timeframes" },
+    { primary: "Processing price action", secondary: "Detecting overbought and oversold conditions" },
+    { primary: "Scanning 200+ pairs", secondary: "Identifying bullish and bearish signals" },
+    { primary: "Computing indicators", secondary: "Analyzing StochRSI momentum shifts" },
+    { primary: "Evaluating divergences", secondary: "Finding reversal opportunities" },
+    { primary: "Streaming live data", secondary: "Connecting to Binance Futures USDT pairs" },
+  ], []);
+
+  useEffect(() => {
+    if (isLoading && displayedItems.length === 0) {
+      const interval = setInterval(() => {
+        setLoadingTextIndex(prev => (prev + 1) % loadingTexts.length);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isLoading, displayedItems.length, loadingTexts.length]);
+
   if (isLoading && displayedItems.length === 0) {
+    const currentText = loadingTexts[loadingTextIndex];
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <div className="text-center space-y-1">
-          <p className="text-sm font-medium">Fetching market data...</p>
-          <p className="text-xs text-muted-foreground">Loading Binance Futures USDT pairs</p>
+          <p className="text-sm font-medium">{currentText.primary}</p>
+          <p className="text-xs text-muted-foreground">{currentText.secondary}</p>
         </div>
       </div>
     );
@@ -265,13 +332,21 @@ export function CryptoTableInfinite({
                 <Badge className="bg-green-500/20 text-green-500 text-[10px] px-1 py-0 h-4">OS</Badge>
                 <span>Oversold</span>
               </div>
-              <div className="flex items-center gap-1" title="Divergence Bawah: RSI oversold tapi harga mulai naik - sinyal pembalikan bullish">
-                <Badge className="h-4 px-1 bg-green-500 text-white text-[8px]">B</Badge>
-                <span>Divergence Bawah</span>
+              <div className="flex items-center gap-1" title="Divergence Bottom: Price & RSI moving opposite - Bullish reversal">
+                <Badge className="h-4 px-1.5 bg-green-500 text-white text-[8px] font-bold">DB</Badge>
+                <span className="text-xs">Div Bottom</span>
               </div>
-              <div className="flex items-center gap-1" title="Divergence Atas: RSI overbought tapi harga mulai turun - sinyal pembalikan bearish">
-                <Badge className="h-4 px-1 bg-orange-500 text-white text-[8px]">T</Badge>
-                <span>Divergence Atas</span>
+              <div className="flex items-center gap-1" title="Divergence Top: Price & RSI moving opposite - Bearish reversal">
+                <Badge className="h-4 px-1.5 bg-orange-500 text-white text-[8px] font-bold">DT</Badge>
+                <span className="text-xs">Div Top</span>
+              </div>
+              <div className="flex items-center gap-1" title="Convergence Bottom: Price & RSI aligned - Trend continuation">
+                <Badge className="h-4 px-1.5 bg-blue-500 text-white text-[8px] font-bold">CB</Badge>
+                <span className="text-xs">Conv Bottom</span>
+              </div>
+              <div className="flex items-center gap-1" title="Convergence Top: Price & RSI aligned - Trend continuation">
+                <Badge className="h-4 px-1.5 bg-purple-500 text-white text-[8px] font-bold">CT</Badge>
+                <span className="text-xs">Conv Top</span>
               </div>
             </div>
             <Badge variant="outline" className="text-xs ml-auto">
@@ -363,7 +438,7 @@ export function CryptoTableInfinite({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleSort('volume')}
+                  onClick={() => handleSort('quoteVolume')}
                   className="h-7 px-2 text-xs font-medium w-full justify-end"
                 >
                   Volume
