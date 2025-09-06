@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { CryptoData, SortConfig } from '@/lib/types';
-import { ArrowUpDown, Triangle, Loader2, Info, LineChart } from 'lucide-react';
+import { ArrowUpDown, Triangle, Loader2, Info, LineChart, Search, X } from 'lucide-react';
 import { CryptoIcon } from './crypto-icon';
 import { getSignalColor, getSignalBg, getSignalIcon, getTimeframeLabel } from '@/lib/signal-detector';
 import { TradingViewChart } from './tradingview-chart';
@@ -28,8 +28,6 @@ interface CryptoTableInfiniteProps {
   config?: { interval: string; [key: string]: any };
 }
 
-const ITEMS_PER_PAGE = 25;
-
 export function CryptoTableInfinite({ 
   data, 
   sort,
@@ -39,66 +37,19 @@ export function CryptoTableInfinite({
   isLoading,
   config
 }: CryptoTableInfiniteProps) {
-  const [displayedItems, setDisplayedItems] = useState<CryptoData[]>([]);
-  const [page, setPage] = useState(1);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [expandedCharts, setExpandedCharts] = useState<Set<string>>(new Set());
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  // Initialize first page
-  useEffect(() => {
-    if (data.length > 0) {
-      setDisplayedItems(data.slice(0, ITEMS_PER_PAGE));
-      setPage(1);
-    }
-  }, [data]);
-
-  // Load more items
-  const loadMore = useCallback(() => {
-    if (isLoadingMore) return;
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filter data based on search term
+  const displayedItems = useMemo(() => {
+    if (!searchTerm) return data;
     
-    const startIndex = page * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    
-    if (startIndex < data.length) {
-      setIsLoadingMore(true);
-      
-      // Simulate loading delay for smooth UX
-      setTimeout(() => {
-        setDisplayedItems(prev => [...prev, ...data.slice(startIndex, endIndex)]);
-        setPage(prev => prev + 1);
-        setIsLoadingMore(false);
-      }, 300);
-    }
-  }, [data, page, isLoadingMore]);
-
-  // Setup intersection observer for infinite scroll
-  useEffect(() => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const target = entries[0];
-        if (target.isIntersecting && !isLoadingMore && displayedItems.length < data.length) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' }
+    const search = searchTerm.toUpperCase();
+    return data.filter(item => 
+      item.symbol.toUpperCase().includes(search) ||
+      item.symbol.replace('USDT', '').toUpperCase().includes(search)
     );
-
-    if (loadMoreRef.current) {
-      observerRef.current.observe(loadMoreRef.current);
-    }
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [loadMore, isLoadingMore, displayedItems.length, data.length]);
+  }, [data, searchTerm]);
 
   const handleSort = (field: keyof CryptoData) => {
     const newDirection = sort.field === field && sort.direction === 'desc' ? 'asc' : 'desc';
@@ -155,17 +106,54 @@ export function CryptoTableInfinite({
 
   if (isLoading && displayedItems.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center space-y-1">
+          <p className="text-sm font-medium">Fetching market data...</p>
+          <p className="text-xs text-muted-foreground">Loading Binance Futures USDT pairs</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="rounded-lg border bg-card">
-      {/* Legend - Moved to top */}
+      {/* Header with Search and Legend */}
       <div className="p-3 border-b bg-muted/30">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div className="flex flex-col gap-3">
+          {/* Search and Stats Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            {/* Search Box */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search coin..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-8 pl-8 pr-8 text-sm bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-foreground text-muted-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            
+            {/* Stats Badge */}
+            <Badge variant="outline" className="text-xs">
+              <span className="font-bold">{displayedItems.length}</span>
+              {searchTerm && (
+                <span className="text-muted-foreground ml-1">/ {data.length}</span>
+              )}
+              <span className="text-muted-foreground ml-1">coins</span>
+            </Badge>
+          </div>
+          
+          {/* Legend Row */}
           <div className="flex flex-wrap gap-2 sm:gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 bg-red-500 rounded-full"></div>
@@ -180,10 +168,6 @@ export function CryptoTableInfinite({
               <span>RSI / StochRSI</span>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs">
-            <span className="font-bold">{displayedItems.length}</span>
-            <span className="text-muted-foreground ml-1">/ {data.length}</span>
-          </Badge>
         </div>
       </div>
       
@@ -283,7 +267,7 @@ export function CryptoTableInfinite({
                     onClick={() => handleSort('rsi' as keyof CryptoData)}
                     className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
                   >
-                    Current
+                    Trend
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
                   <Button
@@ -359,7 +343,19 @@ export function CryptoTableInfinite({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayedItems.map((item) => (
+            {displayedItems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={20} className="text-center py-8">
+                  <div className="flex flex-col items-center gap-2">
+                    <Search className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="text-sm text-muted-foreground">
+                      {searchTerm ? `No coins found matching "${searchTerm}"` : 'No data available'}
+                    </p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              displayedItems.map((item) => (
               <React.Fragment key={item.id}>
                 <TableRow 
                   className="hover:bg-muted/30 h-12 border-b"
@@ -413,28 +409,49 @@ export function CryptoTableInfinite({
                 {/* RSI / StochRSI Combined Values */}
                 <TableCell className="p-1 border-x hidden md:table-cell" colSpan={5}>
                   <div className="grid grid-cols-5 gap-1">
-                    {/* Current */}
+                    {/* Trend */}
                     <div className="text-center">
                       {(() => {
                         const rsi = item.rsi;
-                        const stochRsi = item.stochRsi * 100;
-                        const bothOversold = rsi <= 30 && stochRsi <= 20;
-                        const bothOverbought = rsi >= 70 && stochRsi >= 80;
+                        const priceChange = item.priceChangePercent;
+                        
+                        // Determine trend based on RSI and price movement
+                        let trend = 'NEUTRAL';
+                        let trendColor = 'text-gray-500';
+                        let bgColor = 'bg-gray-500/10';
+                        let icon = '→';
+                        
+                        if (rsi >= 60 && priceChange > 0) {
+                          trend = 'BULLISH';
+                          trendColor = 'text-green-500';
+                          bgColor = 'bg-green-500/10';
+                          icon = '↑';
+                        } else if (rsi <= 40 && priceChange < 0) {
+                          trend = 'BEARISH';
+                          trendColor = 'text-red-500';
+                          bgColor = 'bg-red-500/10';
+                          icon = '↓';
+                        } else if (rsi >= 50 && priceChange > 0) {
+                          trend = 'UPTREND';
+                          trendColor = 'text-emerald-500';
+                          bgColor = 'bg-emerald-500/10';
+                          icon = '↗';
+                        } else if (rsi <= 50 && priceChange < 0) {
+                          trend = 'DOWNTREND';
+                          trendColor = 'text-orange-500';
+                          bgColor = 'bg-orange-500/10';
+                          icon = '↘';
+                        }
                         
                         return (
-                          <div className={cn(
-                            "inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded",
-                            bothOversold && "bg-green-500/20 border border-green-500/30",
-                            bothOverbought && "bg-red-500/20 border border-red-500/30"
+                          <Badge className={cn(
+                            "text-[10px] font-bold px-1.5 py-0",
+                            trendColor,
+                            bgColor
                           )}>
-                            <span className={cn("text-xs font-medium", getRSIColor(rsi))}>
-                              {Math.round(rsi)}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">/</span>
-                            <span className={cn("text-xs", getRSIColor(stochRsi))}>
-                              {stochRsi.toFixed(0)}
-                            </span>
-                          </div>
+                            <span className="mr-1">{icon}</span>
+                            {trend}
+                          </Badge>
                         );
                       })()}
                     </div>
@@ -649,34 +666,12 @@ export function CryptoTableInfinite({
                 </TableRow>
               )}
               </React.Fragment>
-            ))}
+            ))
+          )}
           </TableBody>
         </Table>
       </div>
       
-      {/* Infinite scroll trigger */}
-      {displayedItems.length < data.length && (
-        <div 
-          ref={loadMoreRef}
-          className="flex items-center justify-center p-4 border-t"
-        >
-          {isLoadingMore ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm text-muted-foreground">Loading more coins...</span>
-            </div>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={loadMore}
-              className="text-xs"
-            >
-              Load More ({data.length - displayedItems.length} remaining)
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
