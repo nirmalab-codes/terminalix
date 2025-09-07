@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -34,10 +34,15 @@ export const metadata: Metadata = {
     description: "Advanced cryptocurrency trading signals with RSI divergence detection",
     creator: "@josephvoxone",
   },
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-  themeColor: "#10b981",
   applicationName: "TERMINALUX",
   manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: "#10b981",
 };
 
 export default function RootLayout({
