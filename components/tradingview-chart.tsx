@@ -20,46 +20,28 @@ export const TradingViewChart = memo(function TradingViewChart({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const toggleFullscreen = async () => {
-    if (!wrapperRef.current) return;
-
-    if (!isFullscreen) {
-      if (wrapperRef.current.requestFullscreen) {
-        await wrapperRef.current.requestFullscreen();
-      } else if ((wrapperRef.current as any).webkitRequestFullscreen) {
-        await (wrapperRef.current as any).webkitRequestFullscreen();
-      } else if ((wrapperRef.current as any).mozRequestFullScreen) {
-        await (wrapperRef.current as any).mozRequestFullScreen();
-      }
-      setIsFullscreen(true);
-    } else {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        await (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        await (document as any).mozCancelFullScreen();
-      }
-      setIsFullscreen(false);
-    }
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
   };
 
-  // Listen for fullscreen changes
+  // Close fullscreen on Escape key
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    if (isFullscreen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
     };
-  }, []);
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -83,7 +65,7 @@ export const TradingViewChart = memo(function TradingViewChart({
       if (typeof (window as any).TradingView !== 'undefined') {
         new (window as any).TradingView.widget({
           width: '100%',
-          height: isFullscreen ? window.innerHeight - 60 : height,
+          height: isFullscreen ? window.innerHeight : height,
           symbol: tvSymbol,
           interval: '15', // 15 minutes default
           timezone: 'Etc/UTC',
@@ -150,20 +132,40 @@ export const TradingViewChart = memo(function TradingViewChart({
     };
   }, [symbol, height, theme, isFullscreen]);
 
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background">
+        <div className="relative w-full h-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleFullscreen}
+            className="absolute top-4 right-4 z-50 h-10 w-10 p-0 bg-background/80 backdrop-blur-sm border"
+            title="Exit fullscreen"
+          >
+            <Minimize2 className="h-5 w-5" />
+          </Button>
+          <div ref={containerRef} className="w-full h-full" />
+          <div className="absolute bottom-4 right-4">
+            <a href={`https://www.tradingview.com/symbols/${symbol}/`} rel="noopener noreferrer" target="_blank">
+              <span className="text-xs text-muted-foreground">Chart by TradingView</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={wrapperRef} className="tradingview-widget-container relative">
       <Button
         variant="ghost"
         size="sm"
         onClick={toggleFullscreen}
-        className="absolute top-2 right-2 z-10 h-8 w-8 p-0"
-        title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        className="absolute top-2 right-2 z-10 h-8 w-8 p-0 bg-background/80 backdrop-blur-sm"
+        title="Enter fullscreen"
       >
-        {isFullscreen ? (
-          <Minimize2 className="h-4 w-4" />
-        ) : (
-          <Maximize2 className="h-4 w-4" />
-        )}
+        <Maximize2 className="h-4 w-4" />
       </Button>
       <div ref={containerRef} />
       <div className="tradingview-widget-copyright">

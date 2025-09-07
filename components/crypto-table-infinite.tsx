@@ -453,7 +453,7 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* Price Changes Section */}
-              <TableHead className="text-center p-1 border-x hidden sm:table-cell" colSpan={6}>
+              <TableHead className="text-center p-1 border-x hidden sm:table-cell">
                 <div className="text-xs font-medium">% Change</div>
                 <div className="grid grid-cols-6 gap-1 mt-1">
                   <Button
@@ -527,7 +527,7 @@ export function CryptoTableInfinite({
               </TableHead>
 
               {/* RSI / StochRSI Combined Section */}
-              <TableHead className="text-center p-1 border-x hidden md:table-cell" colSpan={6}>
+              <TableHead className="text-center p-1 border-x hidden md:table-cell">
                 <div className="text-xs font-medium">RSI / StochRSI</div>
                 <div className="grid grid-cols-6 gap-1 mt-1">
                   <Button
@@ -655,7 +655,7 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* Price Changes - Combined cell */}
-                <TableCell className="p-1 border-x hidden sm:table-cell" colSpan={6}>
+                <TableCell className="p-1 border-x hidden sm:table-cell">
                   <div className="grid grid-cols-6 gap-1">
                     <div className={cn("text-center text-xs font-medium", 
                       (item.priceChange15m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
@@ -695,8 +695,8 @@ export function CryptoTableInfinite({
                 </TableCell>
 
                 {/* RSI / StochRSI Combined Values */}
-                <TableCell className="p-1 border-x hidden md:table-cell" colSpan={5}>
-                  <div className="grid grid-cols-5 gap-1">
+                <TableCell className="p-1 border-x hidden md:table-cell">
+                  <div className="grid grid-cols-6 gap-1">
                     {/* Trend */}
                     <div className="text-center">
                       {(() => {
@@ -826,7 +826,7 @@ export function CryptoTableInfinite({
                 <TableRow>
                   <TableCell colSpan={20} className="p-0 border-b-2">
                     <div className="p-4 bg-muted/20">
-                      <TradingViewChart symbol={item.symbol} />
+                      <TradingViewChart symbol={item.symbol} height={500} />
                     </div>
                   </TableCell>
                 </TableRow>
