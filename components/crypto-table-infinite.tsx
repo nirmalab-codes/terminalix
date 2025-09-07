@@ -12,6 +12,12 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { CryptoData, SortConfig } from '@/lib/types';
 import { ArrowUpDown, Triangle, Loader2, Info, LineChart, Search, X } from 'lucide-react';
@@ -775,21 +781,84 @@ export function CryptoTableInfinite({
 
                 {/* Signal */}
                 <TableCell className="text-center p-1">
-                  {item.signal ? (
+                  {item.scalpingSignal && item.scalpingSignal.type !== 'NEUTRAL' ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex flex-col items-center gap-0.5 cursor-pointer">
+                            <div className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold",
+                        item.scalpingSignal.type === 'LONG' 
+                          ? item.scalpingSignal.strength === 'STRONG' 
+                            ? "bg-green-500 text-white" 
+                            : item.scalpingSignal.strength === 'MEDIUM'
+                            ? "bg-green-500/80 text-white"
+                            : "bg-green-500/60 text-white"
+                          : item.scalpingSignal.type === 'SHORT'
+                          ? item.scalpingSignal.strength === 'STRONG'
+                            ? "bg-red-500 text-white"
+                            : item.scalpingSignal.strength === 'MEDIUM'
+                            ? "bg-red-500/80 text-white"
+                            : "bg-red-500/60 text-white"
+                          : "bg-zinc-500/20 text-zinc-500"
+                      )}>
+                        {item.scalpingSignal.type === 'LONG' ? (
+                          <Triangle className="h-2 w-2 fill-current" />
+                        ) : item.scalpingSignal.type === 'SHORT' ? (
+                          <Triangle className="h-2 w-2 fill-current rotate-180" />
+                        ) : null}
+                        <span>{item.scalpingSignal.type}</span>
+                        <span className="text-[8px] opacity-90">
+                          {item.scalpingSignal.confidence}%
+                        </span>
+                      </div>
+                      <div className="text-[8px] text-muted-foreground">
+                        {item.scalpingSignal.strategy.replace('_', ' ')}
+                      </div>
+                      <div className="text-[8px] font-mono">
+                        RR {item.scalpingSignal.riskRewardRatio.toFixed(1)}
+                      </div>
+                    </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="p-3 max-w-xs">
+                          <div className="space-y-2">
+                            <div className="font-semibold text-sm">
+                              {item.scalpingSignal.type === 'LONG' ? '🟢' : '🔴'} {item.scalpingSignal.strategy.replace('_', ' ')}
+                            </div>
+                            <div className="text-xs space-y-1">
+                              <div>Entry: ${item.scalpingSignal.entry.toFixed(2)}</div>
+                              <div className="text-red-400">SL: ${item.scalpingSignal.stopLoss.toFixed(2)}</div>
+                              <div className="text-green-400">TP1: ${item.scalpingSignal.takeProfit1.toFixed(2)}</div>
+                              <div className="text-green-400">TP2: ${item.scalpingSignal.takeProfit2.toFixed(2)}</div>
+                              {item.scalpingSignal.takeProfit3 && (
+                                <div className="text-green-400">TP3: ${item.scalpingSignal.takeProfit3.toFixed(2)}</div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground border-t pt-2">
+                              {item.scalpingSignal.reason}
+                            </div>
+                            <div className="text-xs">
+                              Confidence: {item.scalpingSignal.confidence}% | RR: {item.scalpingSignal.riskRewardRatio.toFixed(2)}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : item.signal ? (
                     <div className={cn(
                       "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold",
                       item.signal.type === 'LONG' 
                         ? item.signal.strength === 'STRONG' 
-                          ? "bg-green-500 text-white" 
+                          ? "bg-green-500/50 text-green-200" 
                           : item.signal.strength === 'MEDIUM'
-                          ? "bg-green-500/80 text-white"
-                          : "bg-green-500/60 text-white"
+                          ? "bg-green-500/40 text-green-300"
+                          : "bg-green-500/30 text-green-400"
                         : item.signal.type === 'SHORT'
                         ? item.signal.strength === 'STRONG'
-                          ? "bg-red-500 text-white"
+                          ? "bg-red-500/50 text-red-200"
                           : item.signal.strength === 'MEDIUM'
-                          ? "bg-red-500/80 text-white"
-                          : "bg-red-500/60 text-white"
+                          ? "bg-red-500/40 text-red-300"
+                          : "bg-red-500/30 text-red-400"
                         : "bg-zinc-500/20 text-zinc-500"
                     )}>
                       {item.signal.type === 'LONG' ? (

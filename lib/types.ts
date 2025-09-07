@@ -63,6 +63,19 @@ export interface RSIData {
 export interface CryptoData extends MarketData, RSIData {
   id: string;
   lastUpdate: number;
+  scalpingSignal?: {
+    type: 'LONG' | 'SHORT' | 'NEUTRAL';
+    strength: 'STRONG' | 'MEDIUM' | 'WEAK';
+    strategy: string;
+    entry: number;
+    stopLoss: number;
+    takeProfit1: number;
+    takeProfit2: number;
+    takeProfit3?: number;
+    riskRewardRatio: number;
+    confidence: number;
+    reason: string;
+  };
 }
 
 export interface ConfigSettings {

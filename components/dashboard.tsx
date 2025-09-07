@@ -13,6 +13,7 @@ import {
   determineTrend,
 } from '@/lib/indicators';
 import { detectAdvancedSignal } from '@/lib/signal-detector';
+import { detectScalpingSignal, type ScalpingSignal } from '@/lib/scalping-signals';
 import { CryptoData, MarketData } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { CryptoTableInfinite as CryptoTable } from './crypto-table-infinite';
@@ -204,8 +205,8 @@ export function Dashboard() {
         const isOversold = rsi <= config.oversoldLevel;
         const trend = determineTrend(rsi, data.priceChangePercent);
         
-        // Calculate signal
-        const signal = detectAdvancedSignal({
+        // Calculate both signals
+        const oldSignal = detectAdvancedSignal({
           ...data,
           rsi,
           stochRsi: stochRsi.k, // Use K value for display
@@ -213,6 +214,28 @@ export function Dashboard() {
           stochRsiD: stochRsi.d,
           priceChange24h: data.priceChangePercent,
         });
+        
+        // New scalping signal with SMC
+        const scalpingSignal = detectScalpingSignal(
+          {
+            ...data,
+            rsi,
+            stochRsi: stochRsi.value,
+            stochRsiK: stochRsi.k,
+            stochRsiD: stochRsi.d,
+            volume: data.quoteVolume || 0,
+          },
+          klines,
+          data.price
+        );
+        
+        // Use scalping signal if confidence > 50%, otherwise fallback to old signal
+        const signal = scalpingSignal.confidence > 50 ? {
+          type: scalpingSignal.type,
+          strength: scalpingSignal.strength,
+          timeframe: 'SHORT' as const,
+          reason: scalpingSignal.reason
+        } : oldSignal;
 
         return {
           ...data,
@@ -227,6 +250,19 @@ export function Dashboard() {
           reversalSignal: false,
           trend,
           signal,
+          scalpingSignal: scalpingSignal.confidence > 40 ? {
+            type: scalpingSignal.type,
+            strength: scalpingSignal.strength,
+            strategy: scalpingSignal.strategy,
+            entry: scalpingSignal.entry,
+            stopLoss: scalpingSignal.stopLoss,
+            takeProfit1: scalpingSignal.takeProfit1,
+            takeProfit2: scalpingSignal.takeProfit2,
+            takeProfit3: scalpingSignal.takeProfit3,
+            riskRewardRatio: scalpingSignal.riskRewardRatio,
+            confidence: scalpingSignal.confidence,
+            reason: scalpingSignal.reason
+          } : undefined,
           lastUpdate: Date.now(),
         } as CryptoData;
       });
