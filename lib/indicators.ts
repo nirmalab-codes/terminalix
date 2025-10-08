@@ -7,7 +7,7 @@ export function calculateRSI(prices: number[], period: number = 14): number {
 
   const rsi = new RSI(period);
   for (const price of prices) {
-    rsi.update(price);
+    rsi.update(price, false);
   }
 
   const result = rsi.getResult();
@@ -35,7 +35,7 @@ export function calculateStochRSI(
   );
 
   for (const price of prices) {
-    stochRsi.update(price);
+    stochRsi.update(price, false);
   }
 
   const result = stochRsi.getResult();
