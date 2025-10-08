@@ -8,6 +8,70 @@ import { broadcaster } from '@/lib/ws-broadcaster';
 const priceHistories = new Map<string, number[]>();
 const MAX_HISTORY = 100;
 
+// Calculate multi-timeframe RSI from kline data
+async function calculateMultiTimeframeRSI(symbol: string) {
+  try {
+    const updates: any = {};
+
+    // Calculate RSI for each timeframe
+    for (const interval of KLINE_INTERVALS) {
+      // Get last 50 klines for this symbol and interval
+      const klines = await prisma.kline.findMany({
+        where: { symbol, interval },
+        orderBy: { openTime: 'desc' },
+        take: 50,
+      });
+
+      if (klines.length >= 14) {
+        // Extract close prices (reverse to get chronological order)
+        const prices = klines.reverse().map(k => k.close);
+
+        // Calculate RSI
+        const rsi = calculateRSI(prices, 14);
+
+        // Calculate RSI history for StochRSI
+        const rsiHistoryValues: number[] = [];
+        for (let i = 14; i < prices.length; i++) {
+          const periodPrices = prices.slice(i - 14, i + 1);
+          const periodRsi = calculateRSI(periodPrices, 14);
+          rsiHistoryValues.push(periodRsi);
+        }
+
+        // Calculate StochRSI
+        const stochRsi = calculateStochRSI(rsiHistoryValues, 14, 3, 3);
+
+        // Map interval to field names
+        const suffix = interval === '15m' ? '15m' : interval === '30m' ? '30m' : interval === '1h' ? '1h' : '4h';
+
+        updates[`rsi${suffix}`] = rsi;
+        updates[`stochRsi${suffix}`] = stochRsi.value;
+        updates[`stochRsiK${suffix}`] = stochRsi.k / 100;
+        updates[`stochRsiD${suffix}`] = stochRsi.d / 100;
+
+        // Calculate price change for this timeframe (current vs previous candle)
+        if (klines.length >= 2) {
+          const currentPrice = klines[klines.length - 1].close;
+          const previousPrice = klines[klines.length - 2].close;
+          const priceChangePercent = ((currentPrice - previousPrice) / previousPrice) * 100;
+          updates[`priceChange${suffix}`] = priceChangePercent;
+        }
+      }
+    }
+
+    // Update indicator table with multi-timeframe data if we have any updates
+    if (Object.keys(updates).length > 0) {
+      await prisma.indicator.update({
+        where: { symbol },
+        data: updates,
+      });
+
+      console.log(`[Scheduler] 📈 Updated multi-TF RSI for ${symbol}: ${Object.keys(updates).join(', ')}`);
+    }
+  } catch (error) {
+    console.error(`[Scheduler] Error calculating multi-timeframe RSI for ${symbol}:`, error);
+  }
+}
+
 // Top 50 USDT Perpetual Futures symbols
 const SYMBOLS = [
   'BTCUSDT',
@@ -237,6 +301,9 @@ function connectKlineWebSocket() {
       });
 
       console.log(`[Scheduler] 📊 Saved kline: ${kline.s} ${kline.i} @ $${parseFloat(kline.c).toFixed(2)}`);
+
+      // Calculate multi-timeframe RSI when kline closes
+      await calculateMultiTimeframeRSI(kline.s);
     } catch (error) {
       console.error(`[Scheduler] Error saving kline:`, error);
     }

@@ -1,29 +1,16 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
+import React, { useEffect, useMemo } from 'react';
 import { useStore } from '@/lib/store';
-import { BinanceAPI } from '@/lib/binance';
-import { BinanceFuturesAPI } from '@/lib/binance-futures';
-import { getWebSocketManager } from '@/lib/websocket-manager';
-import {
-  calculateRSI,
-  calculateStochRSI,
-  detectReversal,
-  determineTrend,
-} from '@/lib/indicators';
-import { detectAdvancedSignal } from '@/lib/signal-detector';
-import { detectScalpingSignal, type ScalpingSignal } from '@/lib/scalping-signals';
-import { CryptoData, MarketData } from '@/lib/types';
+import { useMarketDataStream } from '@/hooks/useMarketDataStream';
+import { CryptoData } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { CryptoTableInfinite as CryptoTable } from './crypto-table-infinite';
-import { ConfigPanel } from './config-panel';
 import { SignalMarquee } from './signal-marquee';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, TrendingUp, TrendingDown, Activity, Wifi, Triangle } from 'lucide-react';
+import { AlertTriangle, Wifi, Triangle } from 'lucide-react';
 
 export function Dashboard() {
   const {
@@ -35,552 +22,38 @@ export function Dashboard() {
     error,
     selectedSymbols,
     setCryptoData,
-    updateCryptoItem,
-    setConfig,
-    setFilter,
     setSort,
     setLoading,
     setError,
     toggleSymbol,
   } = useStore();
 
-  const [binanceAPI] = useState(() => new BinanceAPI());
-  const [futuresAPI] = useState(() => new BinanceFuturesAPI());
-  const [wsManager] = useState(() => getWebSocketManager());
-  const [isConnected, setIsConnected] = useState(false);
-  const [priceHistory, setPriceHistory] = useState<Map<string, number[]>>(new Map());
-  const [rsiHistory, setRsiHistory] = useState<Map<string, number[]>>(new Map());
-  // Multi-timeframe price history
-  const [multiTfPriceHistory, setMultiTfPriceHistory] = useState<Map<string, Map<string, number[]>>>(new Map());
-  // Store initial prices for calculating percentage changes
-  const [priceChangeData, setPriceChangeData] = useState<Map<string, Record<string, number>>>(new Map());
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const klineUnsubscribesRef = useRef<Map<string, () => void>>(new Map());
+  // Use the market data stream hook - gets data directly from DB
+  // The binance-scheduler is already populating the database with market data + indicators
+  const { data: streamData, isConnected } = useMarketDataStream({
+    symbols: selectedSymbols.length > 0 ? selectedSymbols : undefined,
+    enabled: true,
+  });
 
-  // Calculate indicators for a symbol
-  const calculateIndicators = useCallback((
-    data: Partial<MarketData>,
-    symbol: string
-  ): Partial<CryptoData> => {
-    const history = priceHistory.get(symbol) || [];
-    const updatedHistory = [...history, data.price || 0].slice(-100);
-    
-    // Update price history
-    setPriceHistory(prev => {
-      const newMap = new Map(prev);
-      newMap.set(symbol, updatedHistory);
-      return newMap;
-    });
-
-    const rsi = calculateRSI(updatedHistory, config.rsiPeriod);
-    
-    const rsiHist = rsiHistory.get(symbol) || [];
-    const updatedRsiHist = [...rsiHist, rsi].slice(-50);
-    
-    // Update RSI history
-    setRsiHistory(prev => {
-      const newMap = new Map(prev);
-      newMap.set(symbol, updatedRsiHist);
-      return newMap;
-    });
-
-    const stochRsi = calculateStochRSI(updatedRsiHist, config.stochRsiPeriod);
-    const previousRsi = updatedRsiHist[updatedRsiHist.length - 2] || rsi;
-    const previousStochRsi = updatedRsiHist.length > 1 
-      ? calculateStochRSI(updatedRsiHist.slice(0, -1), config.stochRsiPeriod).value 
-      : stochRsi.value;
-
-    const isOverbought = rsi >= config.overboughtLevel;
-    const isOversold = rsi <= config.oversoldLevel;
-    const reversalSignal = detectReversal(
-      rsi,
-      previousRsi,
-      stochRsi.value,
-      previousStochRsi,
-      config.overboughtLevel,
-      config.oversoldLevel
-    );
-    const trend = determineTrend(rsi, data.priceChangePercent || 0);
-    
-    // Get current crypto data to include multi-timeframe values
-    const currentData = cryptoData.find(c => c.symbol === data.symbol);
-    
-    // Calculate advanced signal with all available data
-    const signal = detectAdvancedSignal({
-      ...data,
-      rsi,
-      stochRsi: stochRsi.value,
-      stochRsiK: stochRsi.k,
-      stochRsiD: stochRsi.d,
-      // Include multi-timeframe data if available
-      ...(currentData ? {
-        rsi15m: currentData.rsi15m,
-        rsi30m: currentData.rsi30m,
-        rsi1h: currentData.rsi1h,
-        rsi4h: currentData.rsi4h,
-        stochRsi15m: currentData.stochRsi15m,
-        stochRsi30m: currentData.stochRsi30m,
-        stochRsi1h: currentData.stochRsi1h,
-        stochRsi4h: currentData.stochRsi4h,
-        priceChange15m: currentData.priceChange15m,
-        priceChange1h: currentData.priceChange1h,
-        priceChange4h: currentData.priceChange4h,
-      } : {})
-    });
-
-    return {
-      ...data,
-      rsi,
-      stochRsi: stochRsi.value,
-      stochRsiK: stochRsi.k,
-      stochRsiD: stochRsi.d,
-      isOverbought,
-      isOversold,
-      reversalSignal,
-      trend,
-      signal,
-      lastUpdate: Date.now(),
-    };
-  }, [config, priceHistory, rsiHistory, cryptoData]);
-
-  // Initial data fetch (REST API - only once) - OPTIMIZED VERSION
-  const fetchInitialData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    let cryptoDataResults: CryptoData[] = [];
-
-    try {
-      let symbols = selectedSymbols;
-      let marketData: any[] = [];
-      
-      if (symbols.length === 0) {
-        // Get all Futures pairs with data in one call
-        const futuresData = await futuresAPI.getTopFuturesData(); // Get all futures pairs
-        symbols = futuresData.symbols;
-        marketData = futuresData.marketData;
-        console.log(`Loaded ${symbols.length} Futures pairs`);
-      } else {
-        // If specific symbols selected, get their data
-        marketData = await binanceAPI.getMarketData(symbols);
-      }
-      
-      // Fetch all klines in parallel for much faster loading
-      console.log('Fetching klines for all symbols in parallel...');
-      const startTime = Date.now();
-      
-      // Get initial klines for current interval for all symbols at once
-      const initialKlines = await futuresAPI.getInitialKlines(symbols, config.interval, 50);
-      
-      // Process all market data with their klines
-      cryptoDataResults = marketData.map((data) => {
-        const klines = initialKlines.get(data.symbol) || [];
-          
-        // Initialize price history
-        if (klines.length > 0) {
-          setPriceHistory(prev => {
-            const newMap = new Map(prev);
-            newMap.set(data.symbol, klines);
-            return newMap;
-          });
-        }
-
-        const rsi = klines.length > config.rsiPeriod ? calculateRSI(klines, config.rsiPeriod) : 50;
-        
-        // Calculate RSI history for StochRSI
-        const rsiHistoryValues: number[] = [];
-        if (klines.length > config.rsiPeriod) {
-          for (let i = config.rsiPeriod; i < klines.length; i++) {
-            const periodPrices = klines.slice(i - config.rsiPeriod, i + 1);
-            const periodRsi = calculateRSI(periodPrices, config.rsiPeriod);
-            rsiHistoryValues.push(periodRsi);
-          }
-          rsiHistoryValues.push(rsi);
-        }
-
-        const stochRsi = rsiHistoryValues.length > config.stochRsiPeriod 
-          ? calculateStochRSI(rsiHistoryValues, config.stochRsiPeriod)
-          : { value: 0.5, k: 0.5, d: 0.5 };
-          
-        const isOverbought = rsi >= config.overboughtLevel;
-        const isOversold = rsi <= config.oversoldLevel;
-        const trend = determineTrend(rsi, data.priceChangePercent);
-        
-        // Calculate both signals
-        const oldSignal = detectAdvancedSignal({
-          ...data,
-          rsi,
-          stochRsi: stochRsi.k, // Use K value for display
-          stochRsiK: stochRsi.k,
-          stochRsiD: stochRsi.d,
-          priceChange24h: data.priceChangePercent,
-        });
-        
-        // New scalping signal with SMC
-        const scalpingSignal = detectScalpingSignal(
-          {
-            ...data,
-            rsi,
-            stochRsi: stochRsi.value,
-            stochRsiK: stochRsi.k,
-            stochRsiD: stochRsi.d,
-            volume: data.quoteVolume || 0,
-          },
-          klines,
-          data.price
-        );
-        
-        // Use scalping signal if confidence > 50%, otherwise fallback to old signal
-        const signal = scalpingSignal.confidence > 50 ? {
-          type: scalpingSignal.type,
-          strength: scalpingSignal.strength,
-          timeframe: 'SHORT' as const,
-          reason: scalpingSignal.reason
-        } : oldSignal;
-
-        return {
-          ...data,
-          id: data.symbol,
-          rsi,
-          priceChange24h: data.priceChangePercent,
-          stochRsi: stochRsi.value,
-          stochRsiK: stochRsi.k,
-          stochRsiD: stochRsi.d,
-          isOverbought,
-          isOversold,
-          reversalSignal: false,
-          trend,
-          signal,
-          scalpingSignal: scalpingSignal.confidence > 40 ? {
-            type: scalpingSignal.type,
-            strength: scalpingSignal.strength,
-            strategy: scalpingSignal.strategy,
-            entry: scalpingSignal.entry,
-            stopLoss: scalpingSignal.stopLoss,
-            takeProfit1: scalpingSignal.takeProfit1,
-            takeProfit2: scalpingSignal.takeProfit2,
-            takeProfit3: scalpingSignal.takeProfit3,
-            riskRewardRatio: scalpingSignal.riskRewardRatio,
-            confidence: scalpingSignal.confidence,
-            reason: scalpingSignal.reason
-          } : undefined,
-          lastUpdate: Date.now(),
-        } as CryptoData;
-      });
-      setCryptoData(cryptoDataResults);
-      
-      // Setup WebSocket subscriptions for real-time updates
-      setupWebSocketSubscriptions(symbols);
-      
-      // Fetch multi-timeframe data progressively after initial load
-      setTimeout(() => {
-        // Show toast for background processing
-        const toastId = toast.loading('Syncing multi-timeframe data...', {
-          description: 'Processing RSI indicators across 15m, 30m, 1h, 4h timeframes',
-        });
-        
-        fetchMultiTimeframeData(symbols).then(() => {
-          toast.success('Data sync complete', {
-            id: toastId,
-            description: 'All indicators updated successfully',
-          });
-        }).catch(() => {
-          toast.error('Sync failed', {
-            id: toastId,
-            description: 'Some indicators may not be available',
-          });
-        });
-      }, 1000);
-      
-    } catch (err) {
-      console.error('Error fetching initial data:', err);
-      setError('Failed to fetch initial data. Please refresh the page.');
-    } finally {
+  // Process incoming stream data - now includes indicators from the database!
+  useEffect(() => {
+    if (streamData && streamData.length > 0) {
       setLoading(false);
-      // Show initial load complete notification
-      if (cryptoDataResults.length > 0) {
-        toast.info(`Loaded ${cryptoDataResults.length} pairs`, {
-          description: 'Background sync in progress...',
-          duration: 3000,
-        });
-      }
+      setError(null);
+
+      // Map stream data to CryptoData format
+      // The API route now joins Ticker + Indicator tables
+      const processedData: CryptoData[] = streamData.map((data) => ({
+        ...data,
+        id: data.symbol,
+        lastUpdate: Date.now(),
+      })) as CryptoData[];
+
+      setCryptoData(processedData);
     }
-  }, [selectedSymbols, config, binanceAPI, setCryptoData, setLoading, setError]);
+  }, [streamData, setCryptoData, setLoading, setError]);
 
-  // Fetch multi-timeframe data in parallel for much faster loading
-  const fetchMultiTimeframeData = useCallback(async (symbols: string[]) => {
-    const timeframes = ['15m', '30m', '1h', '4h', '1w'];
-    const futuresAPI = new BinanceFuturesAPI();
-    
-    try {
-      // Fetch klines - we need 50 for RSI calculation, but only 2 for price change
-      // Fetch all klines data in parallel batches
-      const allKlinesData = await futuresAPI.batchFetchKlines(symbols, timeframes, 50);
-      
-      // Process all the fetched data
-      for (const [symbol, timeframeData] of allKlinesData.entries()) {
-        // Update multi-timeframe price history
-        setMultiTfPriceHistory(prev => {
-          const newMap = new Map(prev);
-          newMap.set(symbol, timeframeData);
-          return newMap;
-        });
-        
-        const updates: any = {};
-        
-        for (const [tf, klines] of timeframeData.entries()) {
-          if (klines.length >= 2) {
-            // Calculate price change for this timeframe
-            // Compare current price with the price from 1 candle ago (1 period of this timeframe)
-            const currentPrice = klines[klines.length - 1]; // Most recent close price
-            const previousPrice = klines[klines.length - 2]; // Previous candle close price
-            
-            // Calculate percentage change
-            const priceChangePercent = ((currentPrice - previousPrice) / previousPrice) * 100;
-            
-            const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : tf === '4h' ? '4h' : '1w';
-            
-            updates[`priceChange${tfSuffix}`] = priceChangePercent;
-            
-            // Calculate RSI and StochRSI if we have enough data
-            if (klines.length > config.rsiPeriod) {
-              const rsiValue = calculateRSI(klines, config.rsiPeriod);
-              
-              // Calculate RSI history for StochRSI
-              const rsiHistoryValues: number[] = [];
-              for (let i = config.rsiPeriod; i < klines.length; i++) {
-                const periodPrices = klines.slice(i - config.rsiPeriod, i + 1);
-                const periodRsi = calculateRSI(periodPrices, config.rsiPeriod);
-                rsiHistoryValues.push(periodRsi);
-              }
-              rsiHistoryValues.push(rsiValue);
-              
-              // Calculate StochRSI
-              const stochRsiData = calculateStochRSI(rsiHistoryValues, config.stochRsiPeriod);
-              
-              updates[`rsi${tfSuffix}`] = rsiValue;
-              updates[`stochRsi${tfSuffix}`] = stochRsiData.k; // Use K value for display
-              updates[`stochRsiK${tfSuffix}`] = stochRsiData.k;
-              updates[`stochRsiD${tfSuffix}`] = stochRsiData.d;
-            }
-          }
-        }
-        
-        // Update all timeframes for this symbol at once
-        if (Object.keys(updates).length > 0) {
-          // Get current item to recalculate signal with new data
-          const currentItem = cryptoData.find(c => c.symbol === symbol);
-          if (currentItem) {
-            // Recalculate signal with new multi-timeframe data
-            const updatedSignal = detectAdvancedSignal({
-              ...currentItem,
-              ...updates,
-            });
-            
-            updateCryptoItem(symbol, {
-              ...updates,
-              signal: updatedSignal
-            });
-          } else {
-            updateCryptoItem(symbol, updates);
-          }
-        }
-      }
-      
-      console.log(`Fetched multi-timeframe data for ${symbols.length} symbols in parallel`);
-    } catch (error) {
-      console.error('Error fetching multi-timeframe data:', error);
-    }
-  }, [config.rsiPeriod, config.stochRsiPeriod, updateCryptoItem, cryptoData]);
-
-  // Setup WebSocket subscriptions
-  const setupWebSocketSubscriptions = useCallback((symbols: string[]) => {
-    // Unsubscribe previous subscriptions
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-    }
-    
-    // Clear kline subscriptions
-    klineUnsubscribesRef.current.forEach(unsub => unsub());
-    klineUnsubscribesRef.current.clear();
-
-    // Subscribe to ticker updates for all symbols
-    const unsubscribeTickers = wsManager.subscribeMultipleTickers(symbols, (data) => {
-      if (data.symbol) {
-        const indicators = calculateIndicators(data, data.symbol);
-        updateCryptoItem(data.symbol, indicators);
-      }
-    });
-
-    // Subscribe to kline updates for RSI calculation (multiple timeframes)
-    symbols.forEach(symbol => {
-      // Subscribe to current interval
-      const unsubscribeKline = wsManager.subscribeKline(symbol, config.interval, (klineData) => {
-        // Update price history with kline close price
-        setPriceHistory(prev => {
-          const newMap = new Map(prev);
-          const history = newMap.get(symbol) || [];
-          const updatedHistory = [...history, klineData.close].slice(-100);
-          newMap.set(symbol, updatedHistory);
-          return newMap;
-        });
-      });
-      
-      klineUnsubscribesRef.current.set(`${symbol}_${config.interval}`, unsubscribeKline);
-      
-      // Subscribe to multiple timeframes for RSI and price change calculation
-      const timeframes = ['15m', '30m', '1h', '4h'];
-      timeframes.forEach(tf => {
-        const unsubscribeTf = wsManager.subscribeKline(symbol, tf, (klineData) => {
-          // Update multi-timeframe price history
-          setMultiTfPriceHistory(prev => {
-            const newMap = new Map(prev);
-            const symbolTfMap = newMap.get(symbol) || new Map();
-            const history = symbolTfMap.get(tf) || [];
-            const updatedHistory = [...history, klineData.close].slice(-100);
-            symbolTfMap.set(tf, updatedHistory);
-            newMap.set(symbol, symbolTfMap);
-            return newMap;
-          });
-          
-          // Calculate price change percentage from open to current close
-          const openPrice = klineData.open;
-          const closePrice = klineData.close;
-          const priceChangePercent = ((closePrice - openPrice) / openPrice) * 100;
-          
-          // Update price change data
-          setPriceChangeData(prev => {
-            const newMap = new Map(prev);
-            const symbolData = newMap.get(symbol) || {};
-            symbolData[tf] = priceChangePercent;
-            newMap.set(symbol, symbolData);
-            return newMap;
-          });
-          
-          // Calculate and update RSI and StochRSI for this timeframe
-          const symbolTfMap = multiTfPriceHistory.get(symbol);
-          if (symbolTfMap) {
-            const history = symbolTfMap.get(tf);
-            if (history && history.length > config.rsiPeriod) {
-              const rsiValue = calculateRSI(history, config.rsiPeriod);
-              
-              // Calculate RSI history for StochRSI
-              const rsiHistoryValues: number[] = [];
-              for (let i = config.rsiPeriod; i < history.length; i++) {
-                const periodPrices = history.slice(i - config.rsiPeriod, i + 1);
-                const periodRsi = calculateRSI(periodPrices, config.rsiPeriod);
-                rsiHistoryValues.push(periodRsi);
-              }
-              rsiHistoryValues.push(rsiValue);
-              
-              // Calculate StochRSI
-              const stochRsiData = calculateStochRSI(rsiHistoryValues, config.stochRsiPeriod);
-              
-              // Get price change for this timeframe
-              const changeData = priceChangeData.get(symbol);
-              const priceChangeKey = `priceChange${tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : '4h'}`;
-              const tfSuffix = tf === '15m' ? '15m' : tf === '30m' ? '30m' : tf === '1h' ? '1h' : tf === '4h' ? '4h' : '1w';
-              
-              // Update the specific timeframe RSI, StochRSI and price change
-              updateCryptoItem(symbol, {
-                [`rsi${tfSuffix}`]: rsiValue,
-                [`stochRsi${tfSuffix}`]: stochRsiData.value,
-                [`stochRsiK${tfSuffix}`]: stochRsiData.k,
-                [`stochRsiD${tfSuffix}`]: stochRsiData.d,
-                [priceChangeKey]: priceChangePercent
-              });
-            }
-          }
-        });
-        
-        klineUnsubscribesRef.current.set(`${symbol}_${tf}`, unsubscribeTf);
-      });
-    });
-
-    unsubscribeRef.current = unsubscribeTickers;
-    setIsConnected(true);
-  }, [wsManager, config.interval, calculateIndicators, updateCryptoItem]);
-
-  // Check WebSocket connection status
-  useEffect(() => {
-    const checkConnection = setInterval(() => {
-      setIsConnected(wsManager.isConnectionActive());
-    }, 1000);
-
-    return () => clearInterval(checkConnection);
-  }, [wsManager]);
-
-  // Initial data fetch on mount
-  useEffect(() => {
-    fetchInitialData();
-    
-    return () => {
-      // Cleanup WebSocket subscriptions
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-      klineUnsubscribesRef.current.forEach(unsub => unsub());
-    };
-  }, []); // Only run once on mount
-
-  // Re-fetch when symbols or interval changes
-  useEffect(() => {
-    if (cryptoData.length > 0) {
-      const symbols = selectedSymbols.length > 0 ? selectedSymbols : cryptoData.map(d => d.symbol);
-      setupWebSocketSubscriptions(symbols);
-    }
-  }, [selectedSymbols, config.interval]);
-
-  // Re-calculate indicators when RSI/Stoch settings change
-  useEffect(() => {
-    if (cryptoData.length > 0) {
-      // Recalculate all indicators with new settings
-      const updatedData = cryptoData.map(item => {
-        const history = priceHistory.get(item.symbol) || [];
-        if (history.length === 0) return item;
-        
-        const rsi = calculateRSI(history, config.rsiPeriod);
-        const rsiHist = rsiHistory.get(item.symbol) || [rsi];
-        const stochRsi = calculateStochRSI(rsiHist, config.stochRsiPeriod);
-        
-        const previousRsi = rsiHist[rsiHist.length - 2] || rsi;
-        const previousStochRsi = rsiHist.length > 1 
-          ? calculateStochRSI(rsiHist.slice(0, -1), config.stochRsiPeriod).value 
-          : stochRsi.value;
-        
-        const isOverbought = rsi >= config.overboughtLevel;
-        const isOversold = rsi <= config.oversoldLevel;
-        const reversalSignal = detectReversal(
-          rsi,
-          previousRsi,
-          stochRsi.value,
-          previousStochRsi,
-          config.overboughtLevel,
-          config.oversoldLevel
-        );
-        const trend = determineTrend(rsi, item.priceChangePercent);
-        
-        return {
-          ...item,
-          rsi,
-          stochRsi: stochRsi.k, // Use K value for display
-          stochRsiK: stochRsi.k,
-          stochRsiD: stochRsi.d,
-          isOverbought,
-          isOversold,
-          reversalSignal,
-          trend,
-        };
-      });
-      
-      setCryptoData(updatedData);
-    }
-  }, [config.rsiPeriod, config.stochRsiPeriod, config.overboughtLevel, config.oversoldLevel]);
-
-  const handleRefresh = () => {
-    fetchInitialData();
-  };
-
-  const filteredData = React.useMemo(() => {
+  const filteredData = useMemo(() => {
     let filtered = [...cryptoData];
 
     if (filter.showOverbought) {
@@ -613,48 +86,48 @@ export function Dashboard() {
 
     filtered.sort((a, b) => {
       const modifier = sort.direction === 'asc' ? 1 : -1;
-      
+
       // Special handling for signal sorting
       if (sort.field === 'signal') {
         const aSignal = a.signal;
         const bSignal = b.signal;
-        
+
         // Prioritize signals over no signals
         if (!aSignal && !bSignal) return 0;
         if (!aSignal) return modifier;
         if (!bSignal) return -modifier;
-        
+
         // Sort by signal type (LONG > NEUTRAL > SHORT)
         const typeOrder = { 'LONG': 3, 'NEUTRAL': 2, 'SHORT': 1 };
         const typeDiff = (typeOrder[aSignal.type] || 0) - (typeOrder[bSignal.type] || 0);
         if (typeDiff !== 0) return typeDiff * -modifier;
-        
+
         // Then by strength (STRONG > MEDIUM > WEAK)
         const strengthOrder = { 'STRONG': 3, 'MEDIUM': 2, 'WEAK': 1 };
         const strengthDiff = (strengthOrder[aSignal.strength] || 0) - (strengthOrder[bSignal.strength] || 0);
         return strengthDiff * -modifier;
       }
-      
+
       // Special handling for status (isOverbought/isOversold)
       if (sort.field === 'isOverbought') {
         // Get status values
         const aHasStatus = a.isOverbought || a.isOversold;
         const bHasStatus = b.isOverbought || b.isOversold;
-        
+
         // Push items with no status to the end
         if (!aHasStatus && bHasStatus) return 1;
         if (aHasStatus && !bHasStatus) return -1;
         if (!aHasStatus && !bHasStatus) return 0;
-        
+
         // Both have status, sort by priority: Overbought > Oversold
         const aStatus = a.isOverbought ? 2 : 1;
         const bStatus = b.isOverbought ? 2 : 1;
         return (aStatus - bStatus) * -modifier;
       }
-      
+
       const aVal = a[sort.field];
       const bVal = b[sort.field];
-      
+
       // Handle null/undefined values - push them to the end regardless of sort direction
       if (aVal === null || aVal === undefined) {
         return 1; // Always push null/undefined to the end
@@ -662,7 +135,7 @@ export function Dashboard() {
       if (bVal === null || bVal === undefined) {
         return -1; // Always push null/undefined to the end
       }
-      
+
       // For RSI fields, handle special sorting
       if (sort.field.toString().includes('rsi') || sort.field.toString().includes('stochRsi')) {
         // Both values exist, sort normally
@@ -670,24 +143,24 @@ export function Dashboard() {
           return (aVal - bVal) * modifier;
         }
       }
-      
+
       if (typeof aVal === 'number' && typeof bVal === 'number') {
         return (aVal - bVal) * modifier;
       }
-      
+
       return String(aVal).localeCompare(String(bVal)) * modifier;
     });
 
     return filtered;
   }, [cryptoData, filter, sort]);
 
-  const stats = React.useMemo(() => {
+  const stats = useMemo(() => {
     const overbought = cryptoData.filter((item) => item.isOverbought).length;
     const oversold = cryptoData.filter((item) => item.isOversold).length;
     const reversals = cryptoData.filter((item) => item.reversalSignal).length;
     const bullish = cryptoData.filter((item) => item.trend === 'bullish').length;
     const bearish = cryptoData.filter((item) => item.trend === 'bearish').length;
-    
+
     return { overbought, oversold, reversals, bullish, bearish };
   }, [cryptoData]);
 
@@ -695,7 +168,7 @@ export function Dashboard() {
     <div className="space-y-4">
       {/* Signal Marquee */}
       <SignalMarquee cryptoData={cryptoData} />
-      
+
       {/* Connection Status and Stats */}
       <div className="flex items-center gap-3 px-4">
         {/* Connection Badge */}
@@ -706,24 +179,24 @@ export function Dashboard() {
           <Wifi className="h-3 w-3" />
           {isConnected ? 'Live' : 'Offline'}
         </div>
-        
+
         {/* Stats Badges */}
         <div className="flex items-center gap-2 ml-auto">
           <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/10 text-xs">
             <span className="text-red-500 font-medium">{stats.overbought}</span>
             <span className="text-red-400 text-[10px]">OB</span>
           </div>
-          
+
           <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-xs">
             <span className="text-green-500 font-medium">{stats.oversold}</span>
             <span className="text-green-400 text-[10px]">OS</span>
           </div>
-          
+
           <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/10 text-xs">
             <span className="text-yellow-500 font-medium">{stats.reversals}</span>
             <span className="text-yellow-400 text-[10px]">REV</span>
           </div>
-          
+
           <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-zinc-500/10 text-xs">
             <div className="flex items-center gap-0.5">
               <span className="text-green-500 font-medium">{stats.bullish}</span>
