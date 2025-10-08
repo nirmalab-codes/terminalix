@@ -1,0 +1,104 @@
+// Prisma schema for crypto trading data
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Current market data (ticker info)
+model Ticker {
+  symbol             String   @id
+  price              Float
+  priceChange        Float
+  priceChangePercent Float
+  volume             Float
+  quoteVolume        Float
+  high               Float
+  low                Float
+  open               Float
+  close              Float
+  timestamp          DateTime
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
+}
+
+// Pre-calculated indicators and signals
+model Indicator {
+  symbol          String   @id
+  // Main timeframe indicators
+  rsi             Float
+  stochRsi        Float
+  stochRsiK       Float
+  stochRsiD       Float
+  isOverbought    Boolean
+  isOversold      Boolean
+  trend           String   // bullish, bearish, neutral
+  reversalSignal  Boolean  @default(false)
+
+  // Multi-timeframe RSI
+  rsi15m          Float?
+  rsi30m          Float?
+  rsi1h           Float?
+  rsi4h           Float?
+  rsi1w           Float?
+
+  // Multi-timeframe StochRSI
+  stochRsi15m     Float?
+  stochRsi30m     Float?
+  stochRsi1h      Float?
+  stochRsi4h      Float?
+  stochRsi1w      Float?
+  stochRsiK15m    Float?
+  stochRsiK30m    Float?
+  stochRsiK1h     Float?
+  stochRsiK4h     Float?
+  stochRsiK1w     Float?
+  stochRsiD15m    Float?
+  stochRsiD30m    Float?
+  stochRsiD1h     Float?
+  stochRsiD4h     Float?
+  stochRsiD1w     Float?
+
+  // Multi-timeframe price changes
+  priceChange15m  Float?
+  priceChange30m  Float?
+  priceChange1h   Float?
+  priceChange4h   Float?
+  priceChange24h  Float?
+  priceChange1w   Float?
+
+  // Signal data
+  signalType      String?  // LONG, SHORT, NEUTRAL
+  signalStrength  String?  // STRONG, MEDIUM, WEAK
+  signalTimeframe String?  // SHORT, MID, LONG
+  signalReason    String?
+
+  // Scalping signal data (JSON stored as string)
+  scalpingSignal  String?  // JSON stringified
+
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+// Historical kline/candlestick data for calculations
+model Kline {
+  id          Int      @id @default(autoincrement())
+  symbol      String
+  interval    String   // 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w
+  openTime    DateTime
+  closeTime   DateTime
+  open        Float
+  high        Float
+  low         Float
+  close       Float
+  volume      Float
+  quoteVolume Float
+  trades      Int
+  createdAt   DateTime @default(now())
+
+  @@unique([symbol, interval, openTime])
+  @@index([symbol, interval])
+}
