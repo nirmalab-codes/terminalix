@@ -139,10 +139,11 @@ export function CryptoTableInfinite({
   };
 
   const formatPrice = (price: number) => {
-    if (price >= 1000) return price.toFixed(0);
-    if (price >= 1) return price.toFixed(2);
-    if (price >= 0.01) return price.toFixed(4);
-    return price.toFixed(6);
+    const decimals = price >= 1000 ? 2 : 4;
+    return price.toLocaleString('de-DE', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
   };
 
   const getRSIColor = (rsi: number) => {
