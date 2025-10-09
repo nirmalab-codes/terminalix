@@ -103,6 +103,11 @@ export async function GET(request: NextRequest) {
               `data: ${JSON.stringify({ type: 'error', message: 'Failed to fetch data' })}\n\n`
             )
           );
+          controller.enqueue(
+            encoder.encode(
+              `${error}`
+            )
+          );
         }
       }, 1000);
 
