@@ -461,7 +461,7 @@ export function CryptoTableInfinite({
               {/* Price Changes Section */}
               <TableHead className="text-center p-1 border-x hidden sm:table-cell">
                 <div className="text-xs font-medium">% Change</div>
-                <div className="grid grid-cols-6 gap-1 mt-1">
+                <div className="grid grid-cols-5 gap-1 mt-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -507,15 +507,6 @@ export function CryptoTableInfinite({
                     24h
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSort('priceChange1w' as keyof CryptoData)}
-                    className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
-                  >
-                    1w
-                    <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
-                  </Button>
                 </div>
               </TableHead>
 
@@ -535,7 +526,7 @@ export function CryptoTableInfinite({
               {/* RSI / StochRSI Combined Section */}
               <TableHead className="text-center p-1 border-x hidden md:table-cell">
                 <div className="text-xs font-medium">RSI / StochRSI</div>
-                <div className="grid grid-cols-6 gap-1 mt-1">
+                <div className="grid grid-cols-5 gap-1 mt-1">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -579,15 +570,6 @@ export function CryptoTableInfinite({
                     className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
                   >
                     4h
-                    <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSort('rsi1w' as keyof CryptoData)}
-                    className="h-4 p-0 text-[10px] font-normal hover:bg-transparent hover:text-foreground"
-                  >
-                    1w
                     <ArrowUpDown className="h-1.5 w-1.5 ml-0.5 opacity-60" />
                   </Button>
                 </div>
@@ -662,35 +644,30 @@ export function CryptoTableInfinite({
 
                 {/* Price Changes - Combined cell */}
                 <TableCell className="p-1 border-x hidden sm:table-cell">
-                  <div className="grid grid-cols-6 gap-1">
-                    <div className={cn("text-center text-xs font-medium", 
+                  <div className="grid grid-cols-5 gap-1">
+                    <div className={cn("text-center text-xs font-medium",
                       (item.priceChange15m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
-                      {item.priceChange15m !== undefined ? 
+                      {item.priceChange15m !== undefined ?
                         `${item.priceChange15m > 0 ? '+' : ''}${item.priceChange15m.toFixed(1)}%` : '-'}
                     </div>
-                    <div className={cn("text-center text-xs font-medium", 
+                    <div className={cn("text-center text-xs font-medium",
                       (item.priceChange30m ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
-                      {item.priceChange30m !== undefined ? 
+                      {item.priceChange30m !== undefined ?
                         `${item.priceChange30m > 0 ? '+' : ''}${item.priceChange30m.toFixed(1)}%` : '-'}
                     </div>
-                    <div className={cn("text-center text-xs font-medium", 
+                    <div className={cn("text-center text-xs font-medium",
                       (item.priceChange1h ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
-                      {item.priceChange1h !== undefined ? 
+                      {item.priceChange1h !== undefined ?
                         `${item.priceChange1h > 0 ? '+' : ''}${item.priceChange1h.toFixed(1)}%` : '-'}
                     </div>
-                    <div className={cn("text-center text-xs font-medium", 
+                    <div className={cn("text-center text-xs font-medium",
                       (item.priceChange4h ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
-                      {item.priceChange4h !== undefined ? 
+                      {item.priceChange4h !== undefined ?
                         `${item.priceChange4h > 0 ? '+' : ''}${item.priceChange4h.toFixed(1)}%` : '-'}
                     </div>
-                    <div className={cn("text-center text-xs font-medium", 
+                    <div className={cn("text-center text-xs font-medium",
                       item.priceChangePercent > 0 ? "text-green-500" : "text-red-500")}>
                       {item.priceChangePercent > 0 ? '+' : ''}{item.priceChangePercent.toFixed(1)}%
-                    </div>
-                    <div className={cn("text-center text-xs font-medium", 
-                      (item.priceChange1w ?? 0) > 0 ? "text-green-500" : "text-red-500")}>
-                      {item.priceChange1w !== undefined ? 
-                        `${item.priceChange1w > 0 ? '+' : ''}${item.priceChange1w.toFixed(1)}%` : '-'}
                     </div>
                   </div>
                 </TableCell>
@@ -702,19 +679,19 @@ export function CryptoTableInfinite({
 
                 {/* RSI / StochRSI Combined Values */}
                 <TableCell className="p-1 border-x hidden md:table-cell">
-                  <div className="grid grid-cols-6 gap-1">
+                  <div className="grid grid-cols-5 gap-1">
                     {/* Trend */}
                     <div className="text-center">
                       {(() => {
                         const rsi = item.rsi;
                         const priceChange = item.priceChangePercent;
-                        
+
                         // Simplified trend: BULLISH or BEARISH based on RSI momentum
                         let trend = 'NEUTRAL';
                         let trendColor = 'text-gray-500';
                         let bgColor = 'bg-gray-500/10';
                         let icon = '→';
-                        
+
                         if (rsi >= 55) {
                           trend = 'BULLISH';
                           trendColor = 'text-green-500';
@@ -726,7 +703,7 @@ export function CryptoTableInfinite({
                           bgColor = 'bg-red-500/10';
                           icon = '↓';
                         }
-                        
+
                         return (
                           <Badge className={cn(
                             "text-[10px] font-bold px-1.5 py-0",
@@ -754,10 +731,6 @@ export function CryptoTableInfinite({
                     {/* 4h */}
                     <div className="text-center">
                       {renderRSICell(item.rsi4h, item.stochRsi4h, item.priceChange4h)}
-                    </div>
-                    {/* 1w */}
-                    <div className="text-center">
-                      {renderRSICell(item.rsi1w, item.stochRsi1w, item.priceChange1w)}
                     </div>
                   </div>
                 </TableCell>

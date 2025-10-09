@@ -1,12 +1,10 @@
 // Background job that connects to Binance WebSocket and saves data to PostgreSQL
 import WebSocket from 'ws';
+import * as cron from 'node-cron';
 import { prisma } from '@/lib/db';
-import { calculateRSI, calculateStochRSI, determineTrend } from '@/lib/indicators';
+import { calculateRSI, calculateStochRSI } from '@/lib/indicators';
 import { broadcaster } from '@/lib/ws-broadcaster';
-
-// Price history storage for indicator calculations
-const priceHistories = new Map<string, number[]>();
-const MAX_HISTORY = 100;
+import { ccxtClient, CCXTClient } from '@/lib/ccxt-client';
 
 // Calculate multi-timeframe RSI from kline data
 async function calculateMultiTimeframeRSI(symbol: string) {
@@ -72,10 +70,11 @@ async function calculateMultiTimeframeRSI(symbol: string) {
   }
 }
 
-// Top 50 USDT Perpetual Futures symbols
+// Top 50 USDT Perpetual Futures symbols (Binance format)
+// Testing with BTC only first
 const SYMBOLS = [
   'BTCUSDT',
-   'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+  'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
   'ADAUSDT', 'DOGEUSDT', 'MATICUSDT', 'DOTUSDT', 'LTCUSDT',
   'AVAXUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT',
   'UNIUSDT', 'FILUSDT', 'APTUSDT', 'ARBUSDT', 'NEARUSDT',
@@ -91,7 +90,7 @@ const SYMBOLS = [
 const KLINE_INTERVALS = ['15m', '30m', '1h', '4h'];
 
 let tickerWs: WebSocket | null = null;
-let klineWs: WebSocket | null = null;
+const cronJobs: cron.ScheduledTask[] = [];
 let isRunning = false;
 
 // Connect to Binance ticker WebSocket (24hr ticker for all symbols)
@@ -115,24 +114,6 @@ function connectTickerWebSocket() {
 
       const symbol = ticker.s;
       const price = parseFloat(ticker.c);
-
-      // Update price history
-      if (!priceHistories.has(symbol)) {
-        priceHistories.set(symbol, []);
-      }
-      const history = priceHistories.get(symbol)!;
-      history.push(price);
-      if (history.length > MAX_HISTORY) {
-        history.shift();
-      }
-
-      // Calculate indicators if we have enough data
-      const rsi = calculateRSI(history, 14);
-      const stochResult = calculateStochRSI(history, 14, 3, 3);
-      const trend = determineTrend(rsi, parseFloat(ticker.P));
-      const isOverbought = rsi > 70;
-      const isOversold = rsi < 30;
-      const reversalSignal = isOverbought || isOversold;
 
       // Save ticker data to PostgreSQL
       await prisma.ticker.upsert({
@@ -164,49 +145,7 @@ function connectTickerWebSocket() {
         },
       });
 
-      // Save indicators to PostgreSQL (only if we have enough data)
-      if (history.length >= 20) {
-        await prisma.indicator.upsert({
-          where: { symbol },
-          create: {
-            symbol,
-            rsi,
-            stochRsi: stochResult.value,
-            stochRsiK: stochResult.k / 100, // Convert to 0-1 range
-            stochRsiD: stochResult.d / 100,
-            isOverbought,
-            isOversold,
-            trend,
-            reversalSignal,
-          },
-          update: {
-            rsi,
-            stochRsi: stochResult.value,
-            stochRsiK: stochResult.k / 100,
-            stochRsiD: stochResult.d / 100,
-            isOverbought,
-            isOversold,
-            trend,
-            reversalSignal,
-          },
-        });
-
-        // Broadcast indicator update to WebSocket clients
-        broadcaster.queueUpdate('indicator', symbol, {
-          rsi,
-          stochRsi: stochResult.value,
-          stochRsiK: stochResult.k / 100,
-          stochRsiD: stochResult.d / 100,
-          isOverbought,
-          isOversold,
-          trend,
-          reversalSignal,
-        });
-
-        console.log(`[Scheduler] 💾 Saved ${symbol}: $${price.toFixed(2)} | RSI: ${rsi.toFixed(1)} | ${trend.toUpperCase()}`);
-      } else {
-        console.log(`[Scheduler] 💾 Saved ticker: ${symbol} @ $${price.toFixed(2)} (collecting data: ${history.length}/20)`);
-      }
+      console.log(`[Scheduler] 💾 Saved ticker: ${symbol} @ $${price.toFixed(2)}`);
 
       // Broadcast ticker update to WebSocket clients
       broadcaster.queueUpdate('ticker', symbol, {
@@ -234,91 +173,131 @@ function connectTickerWebSocket() {
   });
 }
 
-// Batched Kline WebSocket connection (all symbols and intervals)
-function connectKlineWebSocket() {
-  console.log(`[Scheduler] Connecting to batched kline WebSocket...`);
+// Fetch klines via CCXT and save to database
+async function fetchAndSaveKlines(interval: string) {
+  console.log(`[Scheduler] 🔄 Fetching ${interval} klines for ${SYMBOLS.length} symbols...`);
 
-  // Create all streams: symbol@kline_interval
-  const streams: string[] = [];
-  for (const symbol of SYMBOLS) {
-    for (const interval of KLINE_INTERVALS) {
-      streams.push(`${symbol.toLowerCase()}@kline_${interval}`);
+  const startTime = Date.now();
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const binanceSymbol of SYMBOLS) {
+    try {
+      // Convert to CCXT format (e.g., BTCUSDT -> BTC/USDT)
+      const ccxtSymbol = CCXTClient.toCCXTSymbol(binanceSymbol);
+
+      // Fetch OHLCV data from Binance via CCXT
+      const ohlcv = await ccxtClient.fetchOHLCV(ccxtSymbol, interval, 50);
+
+      // Save each kline to database
+      for (const candle of ohlcv) {
+        const [timestamp, open, high, low, close, volume] = candle;
+
+        // Skip if any value is null or undefined
+        if (!timestamp || !open || !high || !low || !close || !volume) continue;
+
+        await prisma.kline.upsert({
+          where: {
+            symbol_interval_openTime: {
+              symbol: binanceSymbol,
+              interval,
+              openTime: new Date(timestamp),
+            },
+          },
+          create: {
+            symbol: binanceSymbol,
+            interval,
+            openTime: new Date(timestamp),
+            closeTime: new Date(timestamp + getIntervalMs(interval)),
+            open,
+            high,
+            low,
+            close,
+            volume,
+            quoteVolume: volume * close, // Approximate
+            trades: 0, // Not available from CCXT OHLCV
+          },
+          update: {
+            closeTime: new Date(timestamp + getIntervalMs(interval)),
+            open,
+            high,
+            low,
+            close,
+            volume,
+            quoteVolume: volume * close,
+          },
+        });
+      }
+
+      // Calculate RSI for this symbol after updating klines
+      await calculateMultiTimeframeRSI(binanceSymbol);
+
+      successCount++;
+    } catch (error) {
+      console.error(`[Scheduler] ⚠️ Error fetching ${interval} klines for ${binanceSymbol}:`, error);
+      errorCount++;
     }
   }
 
-  // Binance allows up to 1024 streams per connection
-  // We have 50 symbols × 4 intervals = 200 streams (well under limit)
-  const wsUrl = `wss://fstream.binance.com/stream?streams=${streams.join('/')}`;
+  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`[Scheduler] ✅ Completed ${interval} klines update: ${successCount} success, ${errorCount} errors in ${duration}s`);
+}
 
-  klineWs = new WebSocket(wsUrl);
+// Helper function to convert interval string to milliseconds
+function getIntervalMs(interval: string): number {
+  const value = parseInt(interval.slice(0, -1));
+  const unit = interval.slice(-1);
 
-  klineWs.on('open', () => {
-    console.log(`[Scheduler] ✅ Kline WebSocket connected with ${streams.length} streams (${SYMBOLS.length} symbols × ${KLINE_INTERVALS.length} intervals)`);
+  switch (unit) {
+    case 'm': return value * 60 * 1000;
+    case 'h': return value * 60 * 60 * 1000;
+    case 'd': return value * 24 * 60 * 60 * 1000;
+    default: return 60 * 1000;
+  }
+}
+
+// Setup cron jobs for each timeframe
+function setupCronJobs() {
+  console.log('[Scheduler] 📅 Setting up cron jobs for kline updates...');
+
+  // 15m: Run every 15 minutes
+  const job15m = cron.schedule('*/15 * * * *', () => {
+    fetchAndSaveKlines('15m');
   });
+  cronJobs.push(job15m);
 
-  klineWs.on('message', async (data: WebSocket.Data) => {
-    try {
-      const message = JSON.parse(data.toString());
-      const kline = message.data?.k;
-
-      if (!kline) return;
-
-      // Only save completed candles
-      if (!kline.x) return;
-
-      // Save kline data to PostgreSQL
-      await prisma.kline.upsert({
-        where: {
-          symbol_interval_openTime: {
-            symbol: kline.s,
-            interval: kline.i,
-            openTime: new Date(kline.t),
-          },
-        },
-        create: {
-          symbol: kline.s,
-          interval: kline.i,
-          openTime: new Date(kline.t),
-          closeTime: new Date(kline.T),
-          open: parseFloat(kline.o),
-          high: parseFloat(kline.h),
-          low: parseFloat(kline.l),
-          close: parseFloat(kline.c),
-          volume: parseFloat(kline.v),
-          quoteVolume: parseFloat(kline.q),
-          trades: kline.n,
-        },
-        update: {
-          closeTime: new Date(kline.T),
-          open: parseFloat(kline.o),
-          high: parseFloat(kline.h),
-          low: parseFloat(kline.l),
-          close: parseFloat(kline.c),
-          volume: parseFloat(kline.v),
-          quoteVolume: parseFloat(kline.q),
-          trades: kline.n,
-        },
-      });
-
-      console.log(`[Scheduler] 📊 Saved kline: ${kline.s} ${kline.i} @ $${parseFloat(kline.c).toFixed(2)}`);
-
-      // Calculate multi-timeframe RSI when kline closes
-      await calculateMultiTimeframeRSI(kline.s);
-    } catch (error) {
-      console.error(`[Scheduler] Error saving kline:`, error);
-    }
+  // 30m: Run every 30 minutes
+  const job30m = cron.schedule('*/30 * * * *', () => {
+    fetchAndSaveKlines('30m');
   });
+  cronJobs.push(job30m);
 
-  klineWs.on('error', (error) => {
-    console.error(`[Scheduler] Kline WebSocket error:`, error);
+  // 1h: Run every hour
+  const job1h = cron.schedule('0 * * * *', () => {
+    fetchAndSaveKlines('1h');
   });
+  cronJobs.push(job1h);
 
-  klineWs.on('close', () => {
-    console.log(`[Scheduler] Kline WebSocket disconnected, reconnecting in 5s...`);
-    setTimeout(() => {
-      if (isRunning) connectKlineWebSocket();
-    }, 5000);
+  // 4h: Run every 4 hours
+  const job4h = cron.schedule('0 */4 * * *', () => {
+    fetchAndSaveKlines('4h');
   });
+  cronJobs.push(job4h);
+
+  const now = new Date();
+  console.log('[Scheduler] ✅ Cron jobs configured:');
+  console.log(`  - 15m: Every 15 minutes at :00, :15, :30, :45`);
+  console.log(`  - 30m: Every 30 minutes at :00, :30`);
+  console.log(`  - 1h: Every hour at :00`);
+  console.log(`  - 4h: Every 4 hours at :00 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)`);
+  console.log(`  - Current time: ${now.toLocaleTimeString()}`);
+
+  // Run initial fetch for all intervals to populate data immediately
+  console.log('[Scheduler] 🚀 Running initial kline fetch...');
+  fetchAndSaveKlines('15m');
+  fetchAndSaveKlines('30m');
+  fetchAndSaveKlines('1h');
+  fetchAndSaveKlines('4h');
 }
 
 // Start the background scheduler
@@ -334,8 +313,8 @@ export async function startScheduler() {
   // Connect to ticker WebSocket
   connectTickerWebSocket();
 
-  // Connect to batched kline WebSocket
-  connectKlineWebSocket();
+  // Setup cron jobs for kline updates
+  setupCronJobs();
 
   console.log('[Scheduler] ✅ Background scheduler started successfully');
 }
@@ -350,10 +329,11 @@ export function stopScheduler() {
     tickerWs = null;
   }
 
-  if (klineWs) {
-    klineWs.close();
-    klineWs = null;
+  // Stop all cron jobs
+  for (const job of cronJobs) {
+    job.stop();
   }
+  cronJobs.length = 0;
 
   console.log('[Scheduler] Scheduler stopped');
 }
