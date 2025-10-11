@@ -43,8 +43,8 @@ async function calculateMultiTimeframeRSI(symbol: string) {
 
         updates[`rsi${suffix}`] = rsi;
         updates[`stochRsi${suffix}`] = stochRsi.value;
-        updates[`stochRsiK${suffix}`] = stochRsi.k / 100;
-        updates[`stochRsiD${suffix}`] = stochRsi.d / 100;
+        updates[`stochRsiK${suffix}`] = stochRsi.k;
+        updates[`stochRsiD${suffix}`] = stochRsi.d;
 
         // Calculate price change for this timeframe (current vs previous candle)
         if (klines.length >= 2) {
@@ -74,16 +74,16 @@ async function calculateMultiTimeframeRSI(symbol: string) {
 // Testing with BTC only first
 const SYMBOLS = [
   'BTCUSDT',
-  'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
-  'ADAUSDT', 'DOGEUSDT', 'MATICUSDT', 'DOTUSDT', 'LTCUSDT',
-  'AVAXUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT',
-  'UNIUSDT', 'FILUSDT', 'APTUSDT', 'ARBUSDT', 'NEARUSDT',
-  'OPUSDT', 'ICPUSDT', 'LDOUSDT', 'INJUSDT', 'STXUSDT',
-  'RNDRUSDT', 'SUIUSDT', 'TIAUSDT', 'SEIUSDT', 'THETAUSDT',
-  'IMXUSDT', 'RUNEUSDT', 'AAVEUSDT', 'ALGOUSDT', 'FTMUSDT',
-  'SANDUSDT', 'GRTUSDT', 'MKRUSDT', 'WLDUSDT', 'GALAUSDT',
-  'PENDLEUSDT', 'GMXUSDT', 'ENSUSDT', 'SNXUSDT', 'CFXUSDT',
-  'AXSUSDT', 'FLOWUSDT', 'MANAUSDT', 'CHZUSDT', 'APEUSDT',
+  // 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+  // 'ADAUSDT', 'DOGEUSDT', 'MATICUSDT', 'DOTUSDT', 'LTCUSDT',
+  // 'AVAXUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT',
+  // 'UNIUSDT', 'FILUSDT', 'APTUSDT', 'ARBUSDT', 'NEARUSDT',
+  // 'OPUSDT', 'ICPUSDT', 'LDOUSDT', 'INJUSDT', 'STXUSDT',
+  // 'RNDRUSDT', 'SUIUSDT', 'TIAUSDT', 'SEIUSDT', 'THETAUSDT',
+  // 'IMXUSDT', 'RUNEUSDT', 'AAVEUSDT', 'ALGOUSDT', 'FTMUSDT',
+  // 'SANDUSDT', 'GRTUSDT', 'MKRUSDT', 'WLDUSDT', 'GALAUSDT',
+  // 'PENDLEUSDT', 'GMXUSDT', 'ENSUSDT', 'SNXUSDT', 'CFXUSDT',
+  // 'AXSUSDT', 'FLOWUSDT', 'MANAUSDT', 'CHZUSDT', 'APEUSDT',
 ];
 
 // Kline intervals to track
