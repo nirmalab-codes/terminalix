@@ -39,12 +39,12 @@ export function calculateStochRSI(
   }
 
   const result = stochRsi.getResult();
-  
-  const stochRsiValue = result ? Number(result) * 100 : 0; // Convert to 0-1 range
 
-  // Get K and D from the smoothing averages
-  const k = stochRsi.smoothing.k.getResult() ? Number(stochRsi.smoothing.k.getResult()) : 50;
-  const d = stochRsi.smoothing.d.getResult() ? Number(stochRsi.smoothing.d.getResult()) : 50;
+  const stochRsiValue = result ? Number(result) * 100 : 0; // Convert 0-1 to 0-100 range
+
+  // Get K and D from the smoothing averages (convert 0-1 to 0-100 range)
+  const k = stochRsi.smoothing.k.getResult() ? Number(stochRsi.smoothing.k.getResult()) * 100 : 50;
+  const d = stochRsi.smoothing.d.getResult() ? Number(stochRsi.smoothing.d.getResult()) * 100 : 50;
 
   return { k, d, value: stochRsiValue };
 }

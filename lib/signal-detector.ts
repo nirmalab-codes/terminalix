@@ -3,9 +3,9 @@ import { SignalData, CryptoData } from './types';
 export function detectAdvancedSignal(data: Partial<CryptoData>): SignalData {
   const {
     rsi = 50,
-    stochRsi = 0.5,
-    stochRsiK = 0.5,
-    stochRsiD = 0.5,
+    stochRsi = 50,
+    stochRsiK = 50,
+    stochRsiD = 50,
     rsi15m,
     rsi30m,
     rsi1h,
@@ -41,10 +41,10 @@ export function detectAdvancedSignal(data: Partial<CryptoData>): SignalData {
   }
 
   if (stochRsi15m !== undefined) {
-    if (stochRsi15m < 0.2) shortTermScore += 2;
-    else if (stochRsi15m < 0.3) shortTermScore += 1;
-    else if (stochRsi15m > 0.8) shortTermScore -= 2;
-    else if (stochRsi15m > 0.7) shortTermScore -= 1;
+    if (stochRsi15m < 20) shortTermScore += 2;
+    else if (stochRsi15m < 30) shortTermScore += 1;
+    else if (stochRsi15m > 80) shortTermScore -= 2;
+    else if (stochRsi15m > 70) shortTermScore -= 1;
   }
 
   // Mid-term analysis (1h-4h)
@@ -63,10 +63,10 @@ export function detectAdvancedSignal(data: Partial<CryptoData>): SignalData {
   }
 
   if (stochRsi1h !== undefined) {
-    if (stochRsi1h < 0.2) midTermScore += 2;
-    else if (stochRsi1h < 0.3) midTermScore += 1;
-    else if (stochRsi1h > 0.8) midTermScore -= 2;
-    else if (stochRsi1h > 0.7) midTermScore -= 1;
+    if (stochRsi1h < 20) midTermScore += 2;
+    else if (stochRsi1h < 30) midTermScore += 1;
+    else if (stochRsi1h > 80) midTermScore -= 2;
+    else if (stochRsi1h > 70) midTermScore -= 1;
   }
 
   // Long-term analysis (current + 4h)
@@ -75,18 +75,18 @@ export function detectAdvancedSignal(data: Partial<CryptoData>): SignalData {
   else if (rsi > 70) longTermScore -= 4;
   else if (rsi > 60) longTermScore -= 2;
 
-  if (stochRsi < 0.2) longTermScore += 3;
-  else if (stochRsi < 0.3) longTermScore += 1.5;
-  else if (stochRsi > 0.8) longTermScore -= 3;
-  else if (stochRsi > 0.7) longTermScore -= 1.5;
+  if (stochRsi < 20) longTermScore += 3;
+  else if (stochRsi < 30) longTermScore += 1.5;
+  else if (stochRsi > 80) longTermScore -= 3;
+  else if (stochRsi > 70) longTermScore -= 1.5;
 
   // StochRSI K/D crossover detection
   const kdDiff = stochRsiK - stochRsiD;
-  if (Math.abs(kdDiff) < 0.05) {
-    // Potential crossover
-    if (stochRsi < 0.3 && kdDiff > 0) {
+  if (Math.abs(kdDiff) < 5) {
+    // Potential crossover (within 5 points)
+    if (stochRsi < 30 && kdDiff > 0) {
       shortTermScore += 2; // Bullish crossover in oversold
-    } else if (stochRsi > 0.7 && kdDiff < 0) {
+    } else if (stochRsi > 70 && kdDiff < 0) {
       shortTermScore -= 2; // Bearish crossover in overbought
     }
   }
@@ -153,14 +153,14 @@ export function detectAdvancedSignal(data: Partial<CryptoData>): SignalData {
   
   if (signalType === 'LONG') {
     if (rsi < 30) reasons.push('RSI oversold');
-    if (stochRsi < 0.2) reasons.push('StochRSI oversold');
-    if (kdDiff > 0 && stochRsi < 0.3) reasons.push('Bullish crossover');
+    if (stochRsi < 20) reasons.push('StochRSI oversold');
+    if (kdDiff > 0 && stochRsi < 30) reasons.push('Bullish crossover');
     if (rsi4h && rsi4h < 40) reasons.push('4H oversold');
     reason = reasons.length > 0 ? reasons.join(', ') : 'Technical buy signal';
   } else if (signalType === 'SHORT') {
     if (rsi > 70) reasons.push('RSI overbought');
-    if (stochRsi > 0.8) reasons.push('StochRSI overbought');
-    if (kdDiff < 0 && stochRsi > 0.7) reasons.push('Bearish crossover');
+    if (stochRsi > 80) reasons.push('StochRSI overbought');
+    if (kdDiff < 0 && stochRsi > 70) reasons.push('Bearish crossover');
     if (rsi4h && rsi4h > 60) reasons.push('4H overbought');
     reason = reasons.length > 0 ? reasons.join(', ') : 'Technical sell signal';
   } else {
