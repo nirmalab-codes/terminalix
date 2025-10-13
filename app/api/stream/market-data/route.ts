@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
                 take: symbols.length,
               })
             : await prisma.ticker.findMany({
-                orderBy: { timestamp: 'desc' },
-                take: 50, // Limit to top 50 latest updates
+                orderBy: { quoteVolume: 'desc' }, // Order by volume (most active first)
+                take: 50, // Limit to top 5 (matches scheduler limit)
               });
 
           if (tickers.length > 0) {

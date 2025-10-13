@@ -50,9 +50,22 @@ async function calculateMultiTimeframeRSI(symbol: string) {
 
     // Update indicator table with multi-timeframe data if we have any updates
     if (Object.keys(updates).length > 0) {
-      await prisma.indicator.update({
+      await prisma.indicator.upsert({
         where: { symbol },
-        data: updates,
+        create: {
+          symbol,
+          // Required fields (will be overwritten by updates if present)
+          rsi: 0,
+          stochRsi: 0,
+          stochRsiK: 0,
+          stochRsiD: 0,
+          isOverbought: false,
+          isOversold: false,
+          trend: 'neutral',
+          // Multi-timeframe data from updates
+          ...updates,
+        },
+        update: updates,
       });
 
       console.log(`[Scheduler] 📈 Updated multi-TF RSI for ${symbol}: ${Object.keys(updates).join(', ')}`);
@@ -62,21 +75,10 @@ async function calculateMultiTimeframeRSI(symbol: string) {
   }
 }
 
-// Top 50 USDT Perpetual Futures symbols (Binance format)
-// Testing with BTC only first
-const SYMBOLS = [
-  'BTCUSDT',
-  'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
-  'ADAUSDT', 'DOGEUSDT', 'MATICUSDT', 'DOTUSDT', 'LTCUSDT',
-  'AVAXUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT',
-  'UNIUSDT', 'FILUSDT', 'APTUSDT', 'ARBUSDT', 'NEARUSDT',
-  'OPUSDT', 'ICPUSDT', 'LDOUSDT', 'INJUSDT', 'STXUSDT',
-  'RNDRUSDT', 'SUIUSDT', 'TIAUSDT', 'SEIUSDT', 'THETAUSDT',
-  'IMXUSDT', 'RUNEUSDT', 'AAVEUSDT', 'ALGOUSDT', 'FTMUSDT',
-  'SANDUSDT', 'GRTUSDT', 'MKRUSDT', 'WLDUSDT', 'GALAUSDT',
-  'PENDLEUSDT', 'GMXUSDT', 'ENSUSDT', 'SNXUSDT', 'CFXUSDT',
-  'AXSUSDT', 'FLOWUSDT', 'MANAUSDT', 'CHZUSDT', 'APEUSDT',
-];
+// Dynamic top USDT Perpetual Futures symbols (fetched by 24h volume)
+// Updated every 15 minutes to track the most active/liquid coins
+let SYMBOLS: string[] = [];
+const TOP_SYMBOLS_LIMIT = 50;
 
 // Kline intervals to track
 const KLINE_INTERVALS = ['15m', '30m', '1h', '4h'];
@@ -84,13 +86,85 @@ const KLINE_INTERVALS = ['15m', '30m', '1h', '4h'];
 let tickerWs: WebSocket | null = null;
 const cronJobs: cron.ScheduledTask[] = [];
 let isRunning = false;
+let isReconnecting = false;
+
+// Update top symbols by 24h volume
+async function updateTopSymbols(): Promise<boolean> {
+  try {
+    console.log('[Scheduler] 🔄 Updating top symbols by 24h volume...');
+
+    const newSymbols = await ccxtClient.fetchTopSymbolsByVolume(TOP_SYMBOLS_LIMIT);
+
+    // Check if symbols changed
+    const oldSymbols = new Set(SYMBOLS);
+    const newSymbolsSet = new Set(newSymbols);
+
+    const added = newSymbols.filter(s => !oldSymbols.has(s));
+    const removed = SYMBOLS.filter(s => !newSymbolsSet.has(s));
+
+    if (added.length > 0 || removed.length > 0) {
+      console.log(`[Scheduler] 📊 Symbol changes detected:`);
+      if (added.length > 0) console.log(`  ➕ Added (${added.length}):`, added.slice(0, 5).join(', '), added.length > 5 ? '...' : '');
+      if (removed.length > 0) console.log(`  ➖ Removed (${removed.length}):`, removed.slice(0, 5).join(', '), removed.length > 5 ? '...' : '');
+
+      // Update SYMBOLS array
+      SYMBOLS = newSymbols;
+
+      return true; // Symbols changed
+    } else {
+      console.log('[Scheduler] ✅ No symbol changes');
+      return false; // No changes
+    }
+  } catch (error) {
+    console.error('[Scheduler] ⚠️ Error updating top symbols:', error);
+    return false;
+  }
+}
+
+// Reconnect ticker WebSocket with new symbols
+async function reconnectTickerWebSocket() {
+  if (isReconnecting) {
+    console.log('[Scheduler] Already reconnecting WebSocket, skipping...');
+    return;
+  }
+
+  isReconnecting = true;
+
+  try {
+    console.log('[Scheduler] 🔄 Reconnecting ticker WebSocket with updated symbols...');
+
+    // Close existing WebSocket
+    if (tickerWs) {
+      tickerWs.removeAllListeners(); // Remove listeners to prevent auto-reconnect
+      tickerWs.close();
+      tickerWs = null;
+    }
+
+    // Wait a bit before reconnecting
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Connect with new symbols
+    connectTickerWebSocket();
+
+    console.log('[Scheduler] ✅ WebSocket reconnected successfully');
+  } catch (error) {
+    console.error('[Scheduler] ⚠️ Error reconnecting WebSocket:', error);
+  } finally {
+    isReconnecting = false;
+  }
+}
 
 // Connect to Binance ticker WebSocket (24hr ticker for all symbols)
 function connectTickerWebSocket() {
+  if (SYMBOLS.length === 0) {
+    console.log('[Scheduler] ⚠️ No symbols available, skipping WebSocket connection');
+    return;
+  }
+
   const streams = SYMBOLS.map(s => `${s.toLowerCase()}@ticker`).join('/');
   const wsUrl = `wss://fstream.binance.com/stream?streams=${streams}`;
 
-  console.log(`[Scheduler] Connecting to Binance ticker WebSocket...`);
+  console.log(`[Scheduler] Connecting to Binance ticker WebSocket for ${SYMBOLS.length} symbols...`);
   tickerWs = new WebSocket(wsUrl);
 
   tickerWs.on('open', () => {
@@ -160,7 +234,7 @@ function connectTickerWebSocket() {
   tickerWs.on('close', () => {
     console.log('[Scheduler] Ticker WebSocket disconnected, reconnecting in 5s...');
     setTimeout(() => {
-      if (isRunning) connectTickerWebSocket();
+      if (isRunning && !isReconnecting) connectTickerWebSocket();
     }, 5000);
   });
 }
@@ -276,12 +350,22 @@ function setupCronJobs() {
   });
   cronJobs.push(job4h);
 
+  // Top symbols update: Run every 15 minutes to update symbol list
+  const jobSymbols = cron.schedule('*/15 * * * *', async () => {
+    const symbolsChanged = await updateTopSymbols();
+    if (symbolsChanged) {
+      await reconnectTickerWebSocket();
+    }
+  });
+  cronJobs.push(jobSymbols);
+
   const now = new Date();
   console.log('[Scheduler] ✅ Cron jobs configured:');
   console.log(`  - 15m: Every 15 minutes at :00, :15, :30, :45`);
   console.log(`  - 30m: Every 30 minutes at :00, :30`);
   console.log(`  - 1h: Every hour at :00`);
   console.log(`  - 4h: Every 4 hours at :00 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)`);
+  console.log(`  - Symbols: Every 15 minutes (updates top ${TOP_SYMBOLS_LIMIT} coins by volume)`);
   console.log(`  - Current time: ${now.toLocaleTimeString()}`);
 
   // Run initial fetch for all intervals to populate data immediately
@@ -302,10 +386,20 @@ export async function startScheduler() {
   console.log('[Scheduler] 🚀 Starting background scheduler...');
   isRunning = true;
 
-  // Connect to ticker WebSocket
+  // STEP 1: Fetch top symbols BEFORE any other operations
+  console.log('[Scheduler] 📊 Fetching top symbols on startup...');
+  await updateTopSymbols();
+
+  if (SYMBOLS.length === 0) {
+    console.error('[Scheduler] ⚠️ Failed to fetch symbols on startup. Scheduler will not start.');
+    isRunning = false;
+    return;
+  }
+
+  // STEP 2: Connect to ticker WebSocket
   connectTickerWebSocket();
 
-  // Setup cron jobs for kline updates
+  // STEP 3: Setup cron jobs for kline updates (includes initial fetch)
   setupCronJobs();
 
   console.log('[Scheduler] ✅ Background scheduler started successfully');
