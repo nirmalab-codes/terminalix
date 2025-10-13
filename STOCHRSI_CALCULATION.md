@@ -49,73 +49,60 @@ const rsi = calculateRSI(prices, 14);
 - RSI < 30 = Oversold
 - RSI ≈ 50 = Neutral
 
-### 4. Build RSI History for StochRSI
+### 4. Calculate StochRSI
 
-**This is the key step!** StochRSI needs a history of RSI values.
-
-```typescript
-const rsiHistoryValues: number[] = [];
-
-// Calculate RSI for each sliding window
-for (let i = 14; i < prices.length; i++) {
-  const periodPrices = prices.slice(i - 14, i + 1);
-  const periodRsi = calculateRSI(periodPrices, 14);
-  rsiHistoryValues.push(periodRsi);
-}
-```
-
-**Example with 50 prices:**
-- Window 1: prices[0-14] → RSI = 52.3
-- Window 2: prices[1-15] → RSI = 53.1
-- Window 3: prices[2-16] → RSI = 54.8
-- ...
-- Window 36: prices[35-49] → RSI = 51.2
-
-Result: `rsiHistoryValues = [52.3, 53.1, 54.8, ..., 51.2]` (36 values)
-
-### 5. Calculate StochRSI
+**Important:** The `trading-signals` library's StochasticRSI calculates RSI internally, so we pass raw prices directly!
 
 ```typescript
-const stochRsi = calculateStochRSI(rsiHistoryValues, 14, 3, 3);
-//                                  ^^^^^^^^^^^^^^^^  ^^  ^  ^
-//                                  RSI values       |  |  |
-//                                                  Period K D
+const stochRsi = calculateStochRSI(prices, 14, 3, 3);
+//                                  ^^^^^^  ^^  ^  ^
+//                                  Raw     |   |  |
+//                                  prices  |   |  |
+//                                          |   |  |
+//                                    Period|   |  |
+//                                    (14)  K   D
 ```
 
 **Parameters:**
-- `rsiHistoryValues`: Array of RSI values (from step 4)
-- `14`: StochRSI period (looks at last 14 RSI values)
+- `prices`: Array of close prices (chronological: oldest → newest)
+- `14`: StochRSI period (looks at last 14 RSI values internally)
 - `3`: K period (smoothing for %K line)
 - `3`: D period (smoothing for %D line)
+
+**How it works internally:**
+1. StochasticRSI calculates RSI for each price (using 14-period RSI by default)
+2. Takes the last 14 RSI values
+3. Applies stochastic formula: (Current RSI - Lowest RSI) / (Highest RSI - Lowest RSI)
+4. Smooths the result with K and D moving averages
 
 **Returns:**
 ```typescript
 {
-  value: 0.65,  // StochRSI value (0-1 range)
+  value: 65,    // StochRSI value (0-100 range)
   k: 68.5,      // %K line (0-100 range)
   d: 72.3       // %D line (0-100 range)
 }
 ```
 
-### 6. Store in Database
+### 5. Store in Database
 
 ```typescript
-updates[`stochRsi${suffix}`] = stochRsi.value;     // 0.65 → stored as-is
-updates[`stochRsiK${suffix}`] = stochRsi.k / 100;  // 68.5 / 100 = 0.685
-updates[`stochRsiD${suffix}`] = stochRsi.d / 100;  // 72.3 / 100 = 0.723
+updates[`stochRsi${suffix}`] = stochRsi.value;  // 65 → stored as-is (0-100 range)
+updates[`stochRsiK${suffix}`] = stochRsi.k;     // 68.5 → stored as-is
+updates[`stochRsiD${suffix}`] = stochRsi.d;     // 72.3 → stored as-is
 ```
 
-**Database values (all in 0-1 range):**
-- `stochRsi15m: 0.65`
-- `stochRsiK15m: 0.685`
-- `stochRsiD15m: 0.723`
+**Database values (all in 0-100 range):**
+- `stochRsi15m: 65`
+- `stochRsiK15m: 68.5`
+- `stochRsiD15m: 72.3`
 
 ## What Each Value Means
 
-### StochRSI Value (0-1 range)
-- **> 0.8** = RSI is overbought (been high recently)
-- **< 0.2** = RSI is oversold (been low recently)
-- **≈ 0.5** = RSI is neutral
+### StochRSI Value (0-100 range)
+- **> 80** = RSI is overbought (been high recently)
+- **< 20** = RSI is oversold (been low recently)
+- **≈ 50** = RSI is neutral
 
 ### %K and %D Lines
 - **%K** = Fast line (more sensitive)
@@ -128,29 +115,31 @@ updates[`stochRsiD${suffix}`] = stochRsi.d / 100;  // 72.3 / 100 = 0.723
 
 **Given 50 BTC 15m candles:**
 
-1. Close prices: [43500, 43520, ..., 43720] (50 values)
-2. Current RSI (14-period): 52.5
-3. RSI history: [52.3, 53.1, 54.8, ..., 51.2] (36 values)
-4. StochRSI calculation:
+1. Close prices: [43500, 43520, ..., 43720] (50 values, chronological)
+2. Pass prices to calculateStochRSI(prices, 14, 3, 3)
+3. StochRSI internally:
+   - Calculates 14-period RSI for each price
+   - Gets RSI history: [52.3, 53.1, 54.8, ..., 51.2]
    - Looks at last 14 RSI values: [50.1, 51.2, 52.5, ..., 51.2]
    - Highest RSI in period: 56.8
    - Lowest RSI in period: 48.2
    - Current RSI: 51.2
-   - StochRSI = (51.2 - 48.2) / (56.8 - 48.2) = 3.0 / 8.6 = **0.349**
-5. %K (3-period SMA of StochRSI): **38.2**
-6. %D (3-period SMA of %K): **42.5**
+   - StochRSI = (51.2 - 48.2) / (56.8 - 48.2) = 3.0 / 8.6 = 0.349 → **34.9 (0-100 scale)**
+4. %K (3-period SMA of StochRSI): **38.2**
+5. %D (3-period SMA of %K): **42.5**
 
 **Stored in DB:**
 - `rsi15m: 52.5`
-- `stochRsi15m: 0.349`
-- `stochRsiK15m: 0.382` (38.2 / 100)
-- `stochRsiD15m: 0.425` (42.5 / 100)
+- `stochRsi15m: 34.9`
+- `stochRsiK15m: 38.2`
+- `stochRsiD15m: 42.5`
 
 ## Why This Approach is Correct
 
 ✅ **Uses candlestick closes** - Not ticker prices
-✅ **Proper RSI history** - Rolling window of RSI values
-✅ **Standard calculation** - Matches TradingView/Binance
+✅ **Uses trading-signals library correctly** - Passes raw prices, library calculates RSI internally
+✅ **Chronological order** - Prices are ordered oldest → newest as expected by the library
+✅ **Standard calculation** - Matches TradingView/Binance methodology
 ✅ **Per timeframe** - Separate calculation for 15m, 30m, 1h, 4h
 
 ## Common Issues

@@ -21,22 +21,14 @@ async function calculateMultiTimeframeRSI(symbol: string) {
       });
 
       if (klines.length >= 14) {
-        // Extract close prices (reverse to get chronological order)
+        // Extract close prices (reverse to get chronological order: oldest → newest)
         const prices = klines.reverse().map(k => k.close);
 
-        // Calculate RSI
+        // Calculate RSI (uses last 14 prices)
         const rsi = calculateRSI(prices, 14);
 
-        // Calculate RSI history for StochRSI
-        const rsiHistoryValues: number[] = [];
-        for (let i = 14; i < prices.length; i++) {
-          const periodPrices = prices.slice(i - 14, i + 1);
-          const periodRsi = calculateRSI(periodPrices, 14);
-          rsiHistoryValues.push(periodRsi);
-        }
-
-        // Calculate StochRSI
-        const stochRsi = calculateStochRSI(rsiHistoryValues, 14, 3, 3);
+        // Calculate StochRSI (pass raw prices, it calculates RSI internally)
+        const stochRsi = calculateStochRSI(prices, 14, 3, 3);
 
         // Map interval to field names
         const suffix = interval === '15m' ? '15m' : interval === '30m' ? '30m' : interval === '1h' ? '1h' : '4h';

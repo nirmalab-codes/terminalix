@@ -16,35 +16,40 @@ export function calculateRSI(prices: number[], period: number = 14): number {
 
 export function calculateStochRSI(
   prices: number[],
-  period: number = 14,
+  stochPeriod: number = 14,
   kPeriod: number = 3,
   dPeriod: number = 3
 ): { k: number; d: number; value: number } {
-  if (prices.length < period + 5) {
-    return { k: 50, d: 50, value: 0.5 };
+  // Need enough data for StochRSI calculation (RSI uses 14 periods by default)
+  if (prices.length < 14 + stochPeriod) {
+    return { k: 50, d: 50, value: 50 };
   }
 
-  // StochasticRSI constructor: (interval, SmoothingRSI?, smoothing?)
+  // StochasticRSI from trading-signals expects raw prices
+  // It calculates RSI internally (using 14 periods), then applies stochastic formula
+  // Constructor: (stochRSI interval, optional SmoothingRSI type, optional k/d smoothing)
   const stochRsi = new StochasticRSI(
-    period,
-    SMA, // Pass the class type, not instance
+    stochPeriod,     // StochRSI lookback period (default: 14)
+    SMA,             // Smoothing indicator for internal RSI calculation
     {
-      k: new SMA(kPeriod),
-      d: new SMA(dPeriod),
+      k: new SMA(kPeriod),  // %K smoothing (default: 3)
+      d: new SMA(dPeriod),  // %D smoothing (default: 3)
     }
   );
 
+  // Feed prices in chronological order (oldest to newest)
   for (const price of prices) {
     stochRsi.update(price, false);
   }
 
   const result = stochRsi.getResult();
 
-  const stochRsiValue = result ? Number(result) * 100 : 0; // Convert 0-1 to 0-100 range
+  // StochRSI returns values in 0-1 range, convert to 0-100
+  const stochRsiValue = result ? Number(result) * 100 : 50;
 
   // Get K and D from the smoothing averages (convert 0-1 to 0-100 range)
-  const k = stochRsi.smoothing.k.getResult() ? Number(stochRsi.smoothing.k.getResult()) * 100 : 50;
-  const d = stochRsi.smoothing.d.getResult() ? Number(stochRsi.smoothing.d.getResult()) * 100 : 50;
+  const k = stochRsi.smoothing?.k?.getResult() ? Number(stochRsi.smoothing.k.getResult()) * 100 : 50;
+  const d = stochRsi.smoothing?.d?.getResult() ? Number(stochRsi.smoothing.d.getResult()) * 100 : 50;
 
   return { k, d, value: stochRsiValue };
 }
