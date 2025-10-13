@@ -53,62 +53,61 @@ class CCXTClient {
    * @returns Array of symbol strings in Binance format (e.g., ['BTCUSDT', 'ETHUSDT'])
    */
   async fetchTopSymbolsByVolume(limit: number = 50): Promise<string[]> {
-    try {
-      console.log(`[CCXT] Fetching top ${limit} symbols by 24h volume...`);
+    console.log(`[CCXT] Fetching top ${limit} symbols by 24h volume...`);
 
-      // Use Binance's native API directly for 24hr ticker statistics
-      // This is more efficient than fetchTickers() and returns all data at once
+    // Try direct API first (faster), fallback to CCXT if blocked
+    try {
       const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr');
 
-      if (!response.ok) {
-        throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+      // Check if response is JSON (not HTML error page)
+      const contentType = response.headers.get('content-type');
+      if (!response.ok || !contentType?.includes('application/json')) {
+        throw new Error(`Direct API blocked or unavailable (${response.status})`);
       }
 
       const tickers = await response.json();
 
-      console.log(`[CCXT] Fetched ${tickers.length} total tickers from Binance`);
-
-      // Filter for USDT pairs and extract quote volume
-      const usdtPairs = tickers
-        .filter((ticker: any) => {
-          // Only include USDT pairs (e.g., BTCUSDT, ETHUSDT)
-          if (!ticker.symbol || !ticker.symbol.endsWith('USDT')) return false;
-
-          // Must have valid quote volume
-          if (!ticker.quoteVolume || parseFloat(ticker.quoteVolume) <= 0) return false;
-
-          return true;
-        })
-        .map((ticker: any) => ({
-          symbol: ticker.symbol,
-          quoteVolume: parseFloat(ticker.quoteVolume),
-        }));
-
-      console.log(`[CCXT] Filtered to ${usdtPairs.length} USDT pairs with volume`);
-
-      // Debug: Show sample of data
-      if (usdtPairs.length > 0) {
-        const samples = usdtPairs.slice(0, 3);
-        console.log(`[CCXT] Sample pairs:`, samples.map((p: any) => `${p.symbol} (vol: $${(p.quoteVolume / 1_000_000).toFixed(1)}M)`).join(', '));
-      } else {
-        // Debug: Show what we got
-        console.log(`[CCXT] DEBUG - No USDT pairs found. Sample ticker:`, JSON.stringify(tickers[0], null, 2));
+      if (!Array.isArray(tickers)) {
+        throw new Error('Unexpected response format from direct API');
       }
 
-      // Sort by quote volume (highest first)
-      usdtPairs.sort((a: any, b: any) => b.quoteVolume - a.quoteVolume);
+      console.log(`[CCXT] ✓ Direct API: ${tickers.length} tickers`);
 
-      // Take top N symbols
-      const topSymbols = usdtPairs
+      // Filter, sort, and take top N
+      const topSymbols = tickers
+        .filter((t: any) => t.symbol?.endsWith('USDT') && parseFloat(t.quoteVolume || '0') > 0)
+        .map((t: any) => ({ symbol: t.symbol, quoteVolume: parseFloat(t.quoteVolume) }))
+        .sort((a, b) => b.quoteVolume - a.quoteVolume)
         .slice(0, limit)
-        .map((pair: any) => pair.symbol);
+        .map(p => p.symbol);
 
-      console.log(`[CCXT] ✅ Fetched top ${topSymbols.length} symbols:`, topSymbols.slice(0, 10).join(', '), topSymbols.length > 10 ? '...' : '');
-
+      console.log(`[CCXT] ✅ Top ${topSymbols.length}:`, topSymbols.slice(0, 10).join(', '), '...');
       return topSymbols;
-    } catch (error) {
-      console.error('[CCXT] Error fetching top symbols:', error);
-      throw error;
+
+    } catch (directError) {
+      console.warn('[CCXT] Direct API failed, using CCXT fallback:', (directError as Error).message);
+
+      // Fallback to CCXT (handles restrictions better)
+      const tickers = await this.exchange.fetchTickers();
+      console.log(`[CCXT] ✓ CCXT Fallback: ${Object.keys(tickers).length} tickers`);
+
+      // Filter, sort, and take top N
+      const topSymbols = Object.entries(tickers)
+        .filter(([symbol, ticker]) => {
+          if (!symbol.endsWith('/USDT')) return false;
+          const vol = ticker.quoteVolume || parseFloat(ticker.info?.quoteVolume || '0');
+          return vol > 0;
+        })
+        .map(([symbol, ticker]) => ({
+          symbol,
+          quoteVolume: ticker.quoteVolume || parseFloat(ticker.info?.quoteVolume || '0'),
+        }))
+        .sort((a, b) => b.quoteVolume - a.quoteVolume)
+        .slice(0, limit)
+        .map(p => CCXTClient.toBinanceSymbol(p.symbol));
+
+      console.log(`[CCXT] ✅ Top ${topSymbols.length}:`, topSymbols.slice(0, 10).join(', '), '...');
+      return topSymbols;
     }
   }
 

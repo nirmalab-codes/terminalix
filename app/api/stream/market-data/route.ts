@@ -1,6 +1,7 @@
 // Server-Sent Events endpoint for real-time market data updates
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
+import { TOP_SYMBOLS_LIMIT } from '@/lib/scheduler/binance-scheduler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
               })
             : await prisma.ticker.findMany({
                 orderBy: { quoteVolume: 'desc' }, // Order by volume (most active first)
-                take: 50, // Limit to top 5 (matches scheduler limit)
+                take: TOP_SYMBOLS_LIMIT, // Limit to top 5 (matches scheduler limit)
               });
 
           if (tickers.length > 0) {

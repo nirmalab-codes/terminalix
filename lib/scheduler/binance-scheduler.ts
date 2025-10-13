@@ -1,6 +1,7 @@
 // Background job that connects to Binance WebSocket and saves data to PostgreSQL
 import WebSocket from 'ws';
 import * as cron from 'node-cron';
+import pLimit from 'p-limit';
 import { prisma } from '@/lib/db';
 import { calculateRSI, calculateStochRSI } from '@/lib/indicators';
 import { broadcaster } from '@/lib/ws-broadcaster';
@@ -78,10 +79,13 @@ async function calculateMultiTimeframeRSI(symbol: string) {
 // Dynamic top USDT Perpetual Futures symbols (fetched by 24h volume)
 // Updated every 15 minutes to track the most active/liquid coins
 let SYMBOLS: string[] = [];
-const TOP_SYMBOLS_LIMIT = 50;
+export const TOP_SYMBOLS_LIMIT = 200;
 
 // Kline intervals to track
 const KLINE_INTERVALS = ['15m', '30m', '1h', '4h'];
+
+// Rate limiter: Max 20 concurrent API requests to Binance
+const apiLimiter = pLimit(20);
 
 let tickerWs: WebSocket | null = null;
 const cronJobs: cron.ScheduledTask[] = [];
@@ -239,30 +243,26 @@ function connectTickerWebSocket() {
   });
 }
 
-// Fetch klines via CCXT and save to database
-async function fetchAndSaveKlines(interval: string) {
-  console.log(`[Scheduler] 🔄 Fetching ${interval} klines for ${SYMBOLS.length} symbols...`);
+// Fetch klines for a single symbol (helper function)
+async function fetchAndSaveKlinesForSymbol(binanceSymbol: string, interval: string) {
+  try {
+    // Convert to CCXT format (e.g., BTCUSDT -> BTC/USDT)
+    const ccxtSymbol = CCXTClient.toCCXTSymbol(binanceSymbol);
 
-  const startTime = Date.now();
-  let successCount = 0;
-  let errorCount = 0;
+    // Fetch OHLCV data from Binance via CCXT
+    const ohlcv = await ccxtClient.fetchOHLCV(ccxtSymbol, interval, 50);
 
-  for (const binanceSymbol of SYMBOLS) {
-    try {
-      // Convert to CCXT format (e.g., BTCUSDT -> BTC/USDT)
-      const ccxtSymbol = CCXTClient.toCCXTSymbol(binanceSymbol);
+    // Prepare batch upsert operations for all candles
+    const upsertOperations = [];
 
-      // Fetch OHLCV data from Binance via CCXT
-      const ohlcv = await ccxtClient.fetchOHLCV(ccxtSymbol, interval, 50);
+    for (const candle of ohlcv) {
+      const [timestamp, open, high, low, close, volume] = candle;
 
-      // Save each kline to database
-      for (const candle of ohlcv) {
-        const [timestamp, open, high, low, close, volume] = candle;
+      // Skip if any value is null or undefined
+      if (!timestamp || !open || !high || !low || !close || !volume) continue;
 
-        // Skip if any value is null or undefined
-        if (!timestamp || !open || !high || !low || !close || !volume) continue;
-
-        await prisma.kline.upsert({
+      upsertOperations.push(
+        prisma.kline.upsert({
           where: {
             symbol_interval_openTime: {
               symbol: binanceSymbol,
@@ -292,18 +292,42 @@ async function fetchAndSaveKlines(interval: string) {
             volume,
             quoteVolume: volume * close,
           },
-        });
-      }
-
-      // Calculate RSI for this symbol after updating klines
-      await calculateMultiTimeframeRSI(binanceSymbol);
-
-      successCount++;
-    } catch (error) {
-      console.error(`[Scheduler] ⚠️ Error fetching ${interval} klines for ${binanceSymbol}:`, error);
-      errorCount++;
+        })
+      );
     }
+
+    // Execute all upserts in a single transaction (OPTIMIZATION #1: Batch DB operations)
+    if (upsertOperations.length > 0) {
+      await prisma.$transaction(upsertOperations);
+    }
+
+    // Calculate RSI for this symbol after updating klines
+    await calculateMultiTimeframeRSI(binanceSymbol);
+
+    return { success: true, symbol: binanceSymbol };
+  } catch (error) {
+    console.error(`[Scheduler] ⚠️ Error fetching ${interval} klines for ${binanceSymbol}:`, error);
+    return { success: false, symbol: binanceSymbol, error };
   }
+}
+
+// Fetch klines via CCXT and save to database (OPTIMIZED)
+async function fetchAndSaveKlines(interval: string) {
+  console.log(`[Scheduler] 🔄 Fetching ${interval} klines for ${SYMBOLS.length} symbols...`);
+
+  const startTime = Date.now();
+
+  // OPTIMIZATION #2 & #3: Parallel fetching with rate limiting
+  // Process all symbols in parallel with max 20 concurrent requests
+  const results = await Promise.all(
+    SYMBOLS.map(symbol =>
+      apiLimiter(() => fetchAndSaveKlinesForSymbol(symbol, interval))
+    )
+  );
+
+  // Count successes and errors
+  const successCount = results.filter(r => r.success).length;
+  const errorCount = results.filter(r => !r.success).length;
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`[Scheduler] ✅ Completed ${interval} klines update: ${successCount} success, ${errorCount} errors in ${duration}s`);

@@ -35,7 +35,7 @@ interface CryptoTableInfiniteProps {
   config?: { interval: string; [key: string]: any };
 }
 
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 200;
 
 export function CryptoTableInfinite({ 
   data, 
